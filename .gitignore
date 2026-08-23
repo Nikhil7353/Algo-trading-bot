@@ -4,6 +4,7 @@ __pycache__/
 db.sqlite3
 logs/
 data/historical/*.csv
+data/*.json
 venv/
 .venv/
 node_modules/

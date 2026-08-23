@@ -24,6 +24,7 @@ class Signal(models.Model):
 class Order(models.Model):
     STATUSES = [
         ("PENDING", "Pending"),
+        ("PARTIALLY_FILLED", "Partially Filled"),
         ("EXECUTED", "Executed"),
         ("CANCELLED", "Cancelled"),
         ("REJECTED", "Rejected"),
@@ -37,7 +38,10 @@ class Order(models.Model):
     side = models.CharField(max_length=4, choices=SIDES)
     quantity = models.IntegerField()
     price = models.DecimalField(max_digits=12, decimal_places=2)
-    status = models.CharField(max_length=10, choices=STATUSES, default="PENDING")
+    filled_quantity = models.IntegerField(default=0)
+    average_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    rejection_reason = models.CharField(max_length=255, blank=True)
+    status = models.CharField(max_length=20, choices=STATUSES, default="PENDING")
     mode = models.CharField(max_length=10, default="paper")  # paper | live
     signal = models.ForeignKey(Signal, on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

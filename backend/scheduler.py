@@ -90,6 +90,10 @@ class TradingScheduler:
         """Execute the full active monitoring, risk management, and scanning cycle."""
         summary = {"sl_tp_exits": 0, "scanned": 0, "signals": 0, "executed": 0, "rejected": 0, "squared_off": 0}
 
+        # 0. Reconcile pending live orders from Angel One order book
+        if self.settings.mode == "live":
+            self.executor.reconcile_orders()
+
         # 1. Check if intraday square-off time has passed (15:15 IST)
         if is_past_square_off_time() and self.risk_manager.positions:
             trade_log.logger.warning("Market square-off time reached (15:15 IST). Closing all positions.")

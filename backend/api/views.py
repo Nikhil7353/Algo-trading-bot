@@ -144,6 +144,13 @@ class ExecuteView(APIView):
             return Response({"error": "Order failed"}, status=500)
 
         rm.register_order()
+        if get_settings().mode == "live":
+            return Response({
+                "order_id": order_id,
+                "status": "pending",
+                "message": f"Live order {order_id} submitted to Angel One. Awaiting execution fill from broker order book.",
+            })
+
         if side.upper() == "SELL":
             pnl = rm.close_position(symbol, price)
             trade_log.logger.info(f"Position closed: {symbol} {final_qty} @ Rs{price}; P&L Rs{pnl}")
@@ -263,28 +270,113 @@ class WatchlistScanView(APIView):
         return Response(results)
 
 
+def _update_env_file(updates: dict):
+    from pathlib import Path
+    from dotenv import load_dotenv
+    env_file = Path(__file__).resolve().parent.parent.parent / ".env"
+    lines = []
+    if env_file.exists():
+        with open(env_file, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+    keys_written = set()
+    new_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in line:
+            k, _, _ = line.partition("=")
+            k = k.strip()
+            if k in updates:
+                new_lines.append(f"{k}={updates[k]}\n")
+                keys_written.add(k)
+                continue
+        new_lines.append(line)
+
+    # Append any new keys
+    for k, v in updates.items():
+        if k not in keys_written:
+            new_lines.append(f"{k}={v}\n")
+
+    with open(env_file, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+
+    load_dotenv(env_file, override=True)
+
+
 class SettingsView(APIView):
     def get(self, request):
         import yaml
+        import os
         from pathlib import Path
         settings_file = Path(__file__).resolve().parent.parent.parent / "config" / "settings.yaml"
         try:
             with open(settings_file, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
+
+            # Overlay environment variables for secrets
+            tg_enabled_env = os.getenv("TELEGRAM_ENABLED", "").lower()
+            tg_enabled = tg_enabled_env in ("true", "1") if tg_enabled_env else data.get("telegram", {}).get("enabled", False)
+            data["telegram"] = {
+                "enabled": tg_enabled,
+                "bot_token": os.getenv("TELEGRAM_BOT_TOKEN", ""),
+                "chat_id": os.getenv("TELEGRAM_CHAT_ID", ""),
+            }
+
+            wa_enabled_env = os.getenv("WHATSAPP_ENABLED", "").lower()
+            wa_enabled = wa_enabled_env in ("true", "1") if wa_enabled_env else data.get("whatsapp", {}).get("enabled", False)
+            data["whatsapp"] = {
+                "enabled": wa_enabled,
+                "phone": os.getenv("WHATSAPP_PHONE", ""),
+                "api_key": os.getenv("WHATSAPP_API_KEY", ""),
+            }
+
             return Response(data)
         except Exception as e:
             return Response({"error": f"Failed to read settings: {str(e)}"}, status=500)
 
     def post(self, request):
         import yaml
+        import copy
         from pathlib import Path
         settings_file = Path(__file__).resolve().parent.parent.parent / "config" / "settings.yaml"
         new_settings = request.data
         if not isinstance(new_settings, dict):
             return Response({"error": "Invalid settings payload"}, status=400)
         try:
+            yaml_settings = copy.deepcopy(new_settings)
+            env_updates = {}
+
+            # Extract Telegram secrets -> .env
+            if "telegram" in new_settings:
+                tg = new_settings["telegram"]
+                if "bot_token" in tg:
+                    env_updates["TELEGRAM_BOT_TOKEN"] = str(tg["bot_token"]).strip()
+                if "chat_id" in tg:
+                    env_updates["TELEGRAM_CHAT_ID"] = str(tg["chat_id"]).strip()
+                if "enabled" in tg:
+                    env_updates["TELEGRAM_ENABLED"] = "true" if tg["enabled"] else "false"
+                # Strip secrets from YAML save
+                yaml_settings["telegram"] = {"enabled": bool(tg.get("enabled", False))}
+
+            # Extract WhatsApp secrets -> .env
+            if "whatsapp" in new_settings:
+                wa = new_settings["whatsapp"]
+                if "phone" in wa:
+                    env_updates["WHATSAPP_PHONE"] = str(wa["phone"]).strip().replace("+", "").replace(" ", "").replace("-", "")
+                if "api_key" in wa:
+                    env_updates["WHATSAPP_API_KEY"] = str(wa["api_key"]).strip()
+                if "enabled" in wa:
+                    env_updates["WHATSAPP_ENABLED"] = "true" if wa["enabled"] else "false"
+                # Strip secrets from YAML save
+                yaml_settings["whatsapp"] = {"enabled": bool(wa.get("enabled", False))}
+
+            # Persist secrets to .env
+            if env_updates:
+                _update_env_file(env_updates)
+
+            # Persist non-sensitive configurations to settings.yaml
             with open(settings_file, "w", encoding="utf-8") as f:
-                yaml.safe_dump(new_settings, f, default_flow_style=False, sort_keys=False)
+                yaml.safe_dump(yaml_settings, f, default_flow_style=False, sort_keys=False)
 
             rm = get_risk_manager()
             risk_cfg = new_settings.get("risk", {})
@@ -302,7 +394,7 @@ class SettingsView(APIView):
             if "max_open_positions" in risk_cfg:
                 rm.max_open_positions = int(risk_cfg["max_open_positions"])
 
-            return Response({"status": "success", "message": "Settings updated successfully", "settings": new_settings})
+            return Response({"status": "success", "message": "Settings updated and secrets safely persisted to .env", "settings": new_settings})
         except Exception as e:
             return Response({"error": f"Failed to save settings: {str(e)}"}, status=500)
 

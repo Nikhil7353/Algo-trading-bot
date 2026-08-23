@@ -113,6 +113,13 @@ class AutoTrader:
 
         self.log(f"Scanning {len(watchlist)} symbols with strategies {active_strategies}…", "info")
 
+        # 0. Reconcile Pending Live Orders from Broker Order Book
+        if settings.mode == "live":
+            from execution.executor import executor
+            rec = executor.reconcile_orders()
+            if rec.get("updated", 0) > 0:
+                self.log(f"🔄 Reconciled {rec['updated']} live broker order status update(s)", "info")
+
         # 1. Manage Existing Open Positions (Trailing Stop-Loss & Take-Profit)
         self._manage_open_positions(settings)
 

@@ -1,31 +1,46 @@
 import json
 import logging
+import os
 import urllib.parse
 import urllib.request
 from pathlib import Path
 import yaml
+from dotenv import load_dotenv
 
 logger = logging.getLogger("stockbot.alerts.whatsapp")
 
-CONFIG_PATH = Path(__file__).resolve().parent.parent.parent / "config" / "settings.yaml"
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+CONFIG_PATH = BASE_DIR / "config" / "settings.yaml"
+load_dotenv(BASE_DIR / ".env")
 
 
 def _load_whatsapp_config() -> tuple[str, str, bool]:
-    """Returns (phone, api_key, enabled) from settings.yaml."""
-    if not CONFIG_PATH.exists():
-        return "", "", False
+    """
+    Returns (phone, api_key, enabled).
+    Prioritizes secure environment variables (.env) over config/settings.yaml.
+    """
+    phone = os.getenv("WHATSAPP_PHONE", "").strip().replace("+", "").replace(" ", "").replace("-", "")
+    api_key = os.getenv("WHATSAPP_API_KEY", "").strip()
+    env_enabled = os.getenv("WHATSAPP_ENABLED", "").strip().lower()
 
-    try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            cfg = yaml.safe_load(f) or {}
-            wa_cfg = cfg.get("whatsapp", {})
-            phone = str(wa_cfg.get("phone", "")).strip().replace("+", "").replace(" ", "").replace("-", "")
-            api_key = str(wa_cfg.get("api_key", "")).strip()
-            enabled = bool(wa_cfg.get("enabled", False))
-            return phone, api_key, enabled
-    except Exception as e:
-        logger.error(f"Error loading WhatsApp config: {e}")
-        return "", "", False
+    enabled = env_enabled in ("true", "1", "yes") if env_enabled else False
+
+    # Fallback to settings.yaml if not in .env
+    if CONFIG_PATH.exists() and (not phone or not api_key):
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                cfg = yaml.safe_load(f) or {}
+                wa_cfg = cfg.get("whatsapp", {})
+                if not phone:
+                    phone = str(wa_cfg.get("phone", "")).strip().replace("+", "").replace(" ", "").replace("-", "")
+                if not api_key:
+                    api_key = str(wa_cfg.get("api_key", "")).strip()
+                if not env_enabled and "enabled" in wa_cfg:
+                    enabled = bool(wa_cfg.get("enabled", False))
+        except Exception as e:
+            logger.error("Error loading WhatsApp config from YAML: %s", e)
+
+    return phone, api_key, enabled
 
 
 def send_whatsapp_message(message: str) -> bool:

@@ -1,31 +1,46 @@
 import json
 import logging
+import os
 import urllib.request
 import urllib.parse
 from pathlib import Path
 import yaml
+from dotenv import load_dotenv
 
 logger = logging.getLogger("stockbot.alerts")
 
-CONFIG_PATH = Path(__file__).resolve().parent.parent.parent / "config" / "settings.yaml"
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+CONFIG_PATH = BASE_DIR / "config" / "settings.yaml"
+load_dotenv(BASE_DIR / ".env")
 
 
 def _load_telegram_config() -> tuple[str, str, bool]:
-    """Returns (bot_token, chat_id, enabled) from settings.yaml or environment."""
-    if not CONFIG_PATH.exists():
-        return "", "", False
+    """
+    Returns (bot_token, chat_id, enabled).
+    Prioritizes secure environment variables (.env) over config/settings.yaml.
+    """
+    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    env_enabled = os.getenv("TELEGRAM_ENABLED", "").strip().lower()
 
-    try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            cfg = yaml.safe_load(f) or {}
-            tg_cfg = cfg.get("telegram", {})
-            token = str(tg_cfg.get("bot_token", "")).strip()
-            chat_id = str(tg_cfg.get("chat_id", "")).strip()
-            enabled = bool(tg_cfg.get("enabled", False))
-            return token, chat_id, enabled
-    except Exception as e:
-        logger.error(f"Error loading telegram config: {e}")
-        return "", "", False
+    enabled = env_enabled in ("true", "1", "yes") if env_enabled else False
+
+    # Fallback to settings.yaml if not in .env
+    if CONFIG_PATH.exists() and (not token or not chat_id):
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                cfg = yaml.safe_load(f) or {}
+                tg_cfg = cfg.get("telegram", {})
+                if not token:
+                    token = str(tg_cfg.get("bot_token", "")).strip()
+                if not chat_id:
+                    chat_id = str(tg_cfg.get("chat_id", "")).strip()
+                if not env_enabled and "enabled" in tg_cfg:
+                    enabled = bool(tg_cfg.get("enabled", False))
+        except Exception as e:
+            logger.error("Error loading telegram config from YAML: %s", e)
+
+    return token, chat_id, enabled
 
 
 def send_telegram_message(message: str, parse_mode: str = "HTML") -> bool:

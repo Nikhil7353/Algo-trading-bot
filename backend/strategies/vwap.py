@@ -24,10 +24,31 @@ class VWAPStrategy(BaseStrategy):
         return self.rsi_period + 10
 
     def _calculate_vwap(self, df: pd.DataFrame) -> pd.Series:
-        typical_price = (df["high"] + df["low"] + df["close"]) / 3
+        """
+        Calculates intraday Volume-Weighted Average Price (VWAP).
+        Resets cumulative price-volume and volume at 09:15 AM on each new trading day.
+        """
+        typical_price = (df["high"] + df["low"] + df["close"]) / 3.0
         volume = df["volume"].replace(0, np.nan).fillna(1)
-        cum_vol_price = (typical_price * volume).cumsum()
-        cum_volume = volume.cumsum()
+        vol_price = typical_price * volume
+
+        # Resolve date series for intraday daily session grouping
+        if "date" in df.columns:
+            date_series = pd.to_datetime(df["date"])
+        elif isinstance(df.index, pd.DatetimeIndex):
+            date_series = pd.to_datetime(df.index)
+        else:
+            date_series = None
+
+        if date_series is not None:
+            # Group by trading date so VWAP resets at market open (09:15 AM IST) each day
+            day_group = date_series.dt.date
+            cum_vol_price = vol_price.groupby(day_group).cumsum()
+            cum_volume = volume.groupby(day_group).cumsum()
+        else:
+            cum_vol_price = vol_price.cumsum()
+            cum_volume = volume.cumsum()
+
         return cum_vol_price / cum_volume
 
     def generate_signals(self, data: pd.DataFrame) -> List[Signal]:

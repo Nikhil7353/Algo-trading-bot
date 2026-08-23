@@ -316,7 +316,12 @@ export default function Settings() {
         <article className="card">
           <div className="panel-heading">
             <div>
-              <h2>💬 WhatsApp Live Alerts</h2>
+              <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                💬 WhatsApp Notifications
+                <span className="badge" style={{ fontSize: '0.65rem', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+                  🔒 Stored in .env
+                </span>
+              </h2>
               <p>Receive trade signals & executions directly on WhatsApp.</p>
             </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, color: whatsappEnabled ? 'var(--green)' : 'var(--text-dim)' }}>
@@ -362,7 +367,12 @@ export default function Settings() {
         <article className="card">
           <div className="panel-heading">
             <div>
-              <h2>📲 Telegram Live Alerts</h2>
+              <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                📲 Telegram Live Alerts
+                <span className="badge" style={{ fontSize: '0.65rem', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+                  🔒 Stored in .env
+                </span>
+              </h2>
               <p>Receive instant notifications on trades and signals.</p>
             </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, color: telegramEnabled ? 'var(--green)' : 'var(--text-dim)' }}>
