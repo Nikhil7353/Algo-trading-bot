@@ -59,23 +59,26 @@ export default function Dashboard() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [squaringOff, setSquaringOff] = useState(false);
   const [squareOffMessage, setSquareOffMessage] = useState('');
+  const [sentiments, setSentiments] = useState([]);
 
   const fetchData = useCallback(async ({ silent = false } = {}) => {
     if (silent) setRefreshing(true);
     else setLoading(true);
 
     try {
-      const [portfolioResult, strategyResult, tradeResult, performanceResult] = await Promise.all([
+      const [portfolioResult, strategyResult, tradeResult, performanceResult, sentimentResult] = await Promise.all([
         api.portfolio(),
         api.strategies(),
         api.trades(),
         api.performance(),
+        api.getSentiment().catch(() => []),
       ]);
 
       setPortfolio(portfolioResult);
       setStrategies(strategyResult);
       setTrades(Array.isArray(tradeResult) ? tradeResult : (tradeResult.results || []));
       setPerformance(Array.isArray(performanceResult) ? performanceResult : (performanceResult.results || []));
+      setSentiments(Array.isArray(sentimentResult) ? sentimentResult : []);
       setError('');
       setLastUpdated(new Date());
     } catch {
@@ -274,6 +277,69 @@ export default function Dashboard() {
       <div style={{ marginTop: '1.25rem' }}>
         <AutoTraderWidget />
       </div>
+
+      {/* AI Market Sentiment & Intelligence Overview */}
+      <article className="card dashboard-panel" style={{ marginTop: '1.25rem' }}>
+        <div className="panel-heading">
+          <div>
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              ✨ AI Market Sentiment & Intelligence
+              <span className="badge" style={{ fontSize: '0.68rem', background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8' }}>
+                GROQ NLP
+              </span>
+            </h2>
+            <p>Real-time news headline sentiment across active watchlist equities.</p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => navigate('/assistant')}
+            style={{ fontSize: '0.78rem' }}
+          >
+            Open AI Assistant Hub →
+          </button>
+        </div>
+
+        {sentiments && sentiments.length > 0 ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.65rem', marginTop: '0.5rem' }}>
+            {sentiments.slice(0, 6).map((s, sidx) => {
+              const isBull = s.sentiment === 'BULLISH';
+              const isBear = s.sentiment === 'BEARISH';
+              const bg = isBull ? 'rgba(34, 197, 94, 0.1)' : isBear ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255, 255, 255, 0.03)';
+              const border = isBull ? 'rgba(34, 197, 94, 0.3)' : isBear ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255, 255, 255, 0.08)';
+              const color = isBull ? 'var(--green)' : isBear ? 'var(--red)' : 'var(--text-bright)';
+              return (
+                <div
+                  key={sidx}
+                  onClick={() => navigate('/assistant')}
+                  style={{
+                    padding: '0.55rem 0.85rem',
+                    background: bg,
+                    border: `1px solid ${border}`,
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    fontSize: '0.82rem',
+                  }}
+                  title={s.rationale}
+                >
+                  <strong>{s.symbol}</strong>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 600, color }}>
+                    {isBull ? '🟢 BULL' : isBear ? '🔴 BEAR' : '⚪ NEUT'}
+                  </span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                    ({s.score > 0 ? `+${s.score.toFixed(2)}` : s.score.toFixed(2)})
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="muted-copy">Click "Open AI Assistant Hub" to fetch and score live news headlines.</p>
+        )}
+      </article>
 
       <div className="dashboard-lower-grid">
         <article className="card dashboard-panel strategy-panel">

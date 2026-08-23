@@ -272,6 +272,25 @@ export default function Signals() {
                           <span>Confidence: <strong>{Number(sig.strength || 0.8) * 100}%</strong></span>
                           <span>{sig.date ? String(sig.date).split('T')[0] : 'Latest Bar'}</span>
                         </div>
+                        {sig.explanation && (
+                          <div
+                            style={{
+                              margin: '0.65rem 0',
+                              padding: '0.55rem 0.75rem',
+                              background: 'rgba(99, 102, 241, 0.08)',
+                              border: '1px solid rgba(99, 102, 241, 0.2)',
+                              borderRadius: '6px',
+                              fontSize: '0.78rem',
+                              color: 'var(--text-bright)',
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#818cf8', display: 'flex', alignItems: 'center', gap: '0.25rem', marginBottom: '0.15rem' }}>
+                              ✨ AI RATIONALE
+                            </span>
+                            {sig.explanation}
+                          </div>
+                        )}
                         {action !== 'HOLD' && (
                           <button
                             type="button"

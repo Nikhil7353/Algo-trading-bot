@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     "execution",
     "backtesting",
     "api",
+    "ai_assistant",
 ]
 
 MIDDLEWARE = [

@@ -77,12 +77,26 @@ class ScanView(APIView):
                 data = data.dropna(subset=["open", "high", "low", "close"])
                 signals = engine.analyze(symbol, data)
                 for sig in signals:
+                    explanation = ""
+                    try:
+                        from ai_assistant.services import SignalExplainer
+                        explanation = SignalExplainer.explain_signal(
+                            symbol=sig.symbol,
+                            strategy=sig.strategy,
+                            action=sig.action,
+                            price=_safe_float(sig.price),
+                            metadata=sig.metadata or {},
+                        )
+                    except Exception:
+                        pass
+
                     Signal.objects.create(
                         symbol=sig.symbol,
                         strategy=sig.strategy,
                         action=sig.action,
                         price=_safe_float(sig.price),
                         strength=_safe_float(sig.strength, 0.8),
+                        explanation=explanation,
                         metadata_json=sig.metadata or {},
                     )
 
@@ -111,6 +125,9 @@ class ScanView(APIView):
                             "price": _safe_float(s.price),
                             "strategy": s.strategy,
                             "strength": _safe_float(s.strength, 0.8),
+                            "explanation": getattr(s, "explanation", "") or SignalExplainer.explain_signal(
+                                symbol, s.strategy, s.action, _safe_float(s.price), getattr(s, "metadata", {}) or {}
+                            ),
                         }
                         for s in signals
                     ],

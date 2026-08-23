@@ -32,4 +32,18 @@ export const api = {
   getAutoTraderStatus: () => request('/autotrader/status/'),
   toggleAutoTrader: (payload = {}) => request('/autotrader/toggle/', { method: 'POST', body: JSON.stringify(payload) }),
   getTradesCalendar: () => request('/trades-calendar/'),
+  
+  // AI Assistant APIs
+  chatAssistant: (message, history = []) =>
+    request('/assistant/chat/', { method: 'POST', body: JSON.stringify({ message, history }) }),
+  getAssistantStatus: () => request('/assistant/status/'),
+  getDailySummary: () => request('/assistant/daily-summary/'),
+  generateDailySummary: (sendAlerts = false) =>
+    request('/assistant/daily-summary/', { method: 'POST', body: JSON.stringify({ send_alerts: sendAlerts }) }),
+  getSentiment: (symbol = '') =>
+    request(`/assistant/sentiment/${symbol ? `?symbol=${encodeURIComponent(symbol)}` : ''}`),
+  refreshSentiment: (symbol = '') =>
+    request('/assistant/sentiment/', { method: 'POST', body: JSON.stringify({ symbol }) }),
+  explainSignal: (payload) =>
+    request('/assistant/explain-signal/', { method: 'POST', body: JSON.stringify(payload) }),
 };

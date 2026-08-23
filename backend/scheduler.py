@@ -111,6 +111,15 @@ class TradingScheduler:
         if now_time >= clock_time(15, 0):
             trade_log.logger.info("Past 15:00 IST: skipping new signal entry scans")
             self.risk_manager.save_daily_performance()
+
+            # Generate EOD AI Trading Journal & Alerts after market close (15:30 IST)
+            if now_time >= clock_time(15, 30):
+                try:
+                    from ai_assistant.services import DailyJournalSummarizer
+                    DailyJournalSummarizer.generate_daily_journal(send_alerts=True)
+                except Exception as e:
+                    trade_log.logger.warning("EOD AI Journal generation error: %s", e)
+
             return summary
 
         # 3. Scan watchlist for new entry signals

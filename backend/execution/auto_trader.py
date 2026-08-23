@@ -219,6 +219,20 @@ class AutoTrader:
         stop_loss = entry_price * (Decimal("1.0") - (sl_pct / Decimal("100.0")))
         take_profit = entry_price * (Decimal("1.0") + (tp_pct / Decimal("100.0")))
 
+        # Generate AI explanation for signal
+        explanation = ""
+        try:
+            from ai_assistant.services import SignalExplainer
+            explanation = SignalExplainer.explain_signal(
+                symbol=signal.symbol,
+                strategy=signal.strategy,
+                action=signal.action,
+                price=float(entry_price),
+                metadata=signal.metadata or {},
+            )
+        except Exception:
+            pass
+
         # Create Signal in DB
         db_sig = Signal.objects.create(
             symbol=signal.symbol,
@@ -226,6 +240,7 @@ class AutoTrader:
             action=signal.action,
             price=entry_price,
             strength=signal.strength,
+            explanation=explanation,
             metadata_json=signal.metadata or {},
         )
 

@@ -11,6 +11,7 @@ class Signal(models.Model):
     action = models.CharField(max_length=4, choices=ACTIONS)
     price = models.DecimalField(max_digits=12, decimal_places=2)
     strength = models.FloatField(default=0.0)
+    explanation = models.TextField(blank=True, default="")
     metadata_json = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

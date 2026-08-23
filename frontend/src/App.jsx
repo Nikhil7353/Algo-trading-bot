@@ -4,8 +4,10 @@ import Signals from './pages/Signals';
 import Trades from './pages/Trades';
 import Backtest from './pages/Backtest';
 import Settings from './pages/Settings';
+import AIAssistant from './pages/AIAssistant';
 import MarketTicker from './components/MarketTicker';
 import AutoTraderWidget from './components/AutoTraderWidget';
+import AIAssistantDrawer from './components/AIAssistantDrawer';
 import './App.css';
 
 function Sidebar() {
@@ -19,6 +21,18 @@ function Sidebar() {
           <rect x="14" y="3" width="7" height="5"></rect>
           <rect x="14" y="12" width="7" height="9"></rect>
           <rect x="3" y="16" width="7" height="5"></rect>
+        </svg>
+      ),
+    },
+    {
+      to: '/assistant',
+      label: 'AI Assistant',
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"></path>
+          <rect x="4" y="8" width="16" height="12" rx="2"></rect>
+          <path d="M9 13v2"></path>
+          <path d="M15 13v2"></path>
         </svg>
       ),
     },
@@ -104,11 +118,13 @@ export default function App() {
           <MarketTicker />
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/assistant" element={<AIAssistant />} />
             <Route path="/signals" element={<Signals />} />
             <Route path="/trades" element={<Trades />} />
             <Route path="/backtest" element={<Backtest />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
+          <AIAssistantDrawer />
         </main>
       </div>
     </BrowserRouter>
