@@ -147,7 +147,7 @@ class AIAssistantToolsTests(TestCase):
         self.assertGreater(score, 0.0)
 
     def test_chat_assistant_offline_mode(self):
-        res = AssistantChatService.chat("What is my P&L today?")
+        res = AssistantChatService._offline_chat_response("What is my P&L today?")
         self.assertIn("response", res)
         self.assertIn("Performance & P&L Summary", res["response"])
         self.assertTrue(len(res["tools_used"]) > 0)
