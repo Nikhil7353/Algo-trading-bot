@@ -72,7 +72,7 @@ class OpenAICompatibleClient(BaseAIClient):
         self.model = (
             model
             or os.getenv("AI_MODEL")
-            or ("openai/gpt-oss-120b" if self.provider == "groq" else "gpt-4o-mini")
+            or ("openai/gpt-oss-20b" if self.provider == "groq" else "gpt-4o-mini")
         ).strip()
         self.timeout = int(os.getenv("AI_REQUEST_TIMEOUT", "20"))
 
@@ -95,9 +95,11 @@ class OpenAICompatibleClient(BaseAIClient):
             "Content-Type": "application/json",
         }
 
+        # Keep messages compact to fit TPM budget
+        trimmed_messages = messages[-8:] if len(messages) > 8 else messages
+
         payload: Dict[str, Any] = {
-            "model": self.model,
-            "messages": messages,
+            "messages": trimmed_messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
@@ -106,26 +108,43 @@ class OpenAICompatibleClient(BaseAIClient):
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
 
-        try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
-            resp.raise_for_status()
-            data = resp.json()
-            choice = data["choices"][0]
-            msg = choice.get("message", {})
+        models_to_try = [self.model]
+        if self.provider == "groq":
+            for fallback in ["openai/gpt-oss-20b", "qwen/qwen3.6-27b", "openai/gpt-oss-120b"]:
+                if fallback not in models_to_try:
+                    models_to_try.append(fallback)
 
-            return {
-                "content": msg.get("content") or "",
-                "tool_calls": msg.get("tool_calls") or [],
-                "raw": data,
-                "finish_reason": choice.get("finish_reason", "stop"),
-            }
-        except requests.exceptions.Timeout:
-            logger.error("AI client timed out after %ds", self.timeout)
-            raise TimeoutError(f"AI client request timed out after {self.timeout} seconds")
-        except requests.exceptions.RequestException as e:
-            err_msg = resp.text if "resp" in locals() and resp is not None else str(e)
-            logger.error("AI client HTTP error [%s]: %s", self.provider, err_msg)
-            raise RuntimeError(f"AI API request failed: {err_msg}")
+        last_error = None
+        for attempt_model in models_to_try:
+            payload["model"] = attempt_model
+            try:
+                resp = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
+                if resp.status_code == 429:
+                    logger.warning("Groq rate limit on model %s, trying fallback model...", attempt_model)
+                    time.sleep(1.0)
+                    continue
+
+                resp.raise_for_status()
+                data = resp.json()
+                choice = data["choices"][0]
+                msg = choice.get("message", {})
+
+                return {
+                    "content": msg.get("content") or "",
+                    "tool_calls": msg.get("tool_calls") or [],
+                    "raw": data,
+                    "finish_reason": choice.get("finish_reason", "stop"),
+                }
+            except requests.exceptions.Timeout:
+                logger.error("AI client timed out on model %s", attempt_model)
+                last_error = TimeoutError(f"AI client request timed out after {self.timeout} seconds")
+            except requests.exceptions.RequestException as e:
+                err_msg = resp.text if "resp" in locals() and resp is not None else str(e)
+                logger.warning("AI client request failed on %s: %s", attempt_model, err_msg)
+                last_error = RuntimeError(f"AI API request failed: {err_msg}")
+
+        if last_error:
+            raise last_error
 
     def generate_text(
         self,

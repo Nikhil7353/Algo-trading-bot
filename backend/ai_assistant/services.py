@@ -515,7 +515,45 @@ Guidelines:
                     f"- **{s['symbol']}** — **{s['action']}** via `{s['strategy']}` @ `Rs{s['price']:.2f}` (Strength: {s['strength']:.0%})\n  *Rationale:* {s['explanation']}"
                     for s in signals
                 ]
-                text = "### ⚡ Recent Algorithmic Signals\n\n" + "\n".join(lines)
+        elif any(k in msg_lower for k in ("sentiment", "news", "headline", "reliance", "tcs", "infy", "hdfc", "nifty")):
+            sym_match = None
+            for s in ("RELIANCE", "TCS", "INFY", "HDFCBANK", "SBIN", "ICICIBANK", "TATAMOTORS", "ITC", "WIPRO", "LT"):
+                if s.lower() in msg_lower:
+                    sym_match = s
+                    break
+            sent_data = get_watchlist_sentiment(symbol=sym_match)
+            tools_used.append({"tool": "get_watchlist_sentiment", "args": {"symbol": sym_match}, "result": sent_data})
+
+            if not sent_data:
+                text = "### 📰 Watchlist News & Sentiment\n\nNo active sentiment feeds found. You can refresh feeds in the AI Assistant Hub."
+            else:
+                lines = []
+                for st in sent_data[:4]:
+                    icon = "🟢" if st["sentiment"] == "BULLISH" else "🔴" if st["sentiment"] == "BEARISH" else "⚪"
+                    lines.append(f"- **{st['symbol']}** ({icon} `{st['sentiment']}` | Score: `{st['score']:+.2f}`)\n  *{st['rationale']}*")
+                text = "### 📰 News & Sentiment Breakdown\n\n" + "\n".join(lines)
+        elif any(k in msg_lower for k in ("trade", "history", "closed", "past")):
+            trades = get_trades(limit=5)
+            tools_used.append({"tool": "get_trades", "args": {"limit": 5}, "result": trades})
+            if not trades:
+                text = "### 📜 Trade History\n\nNo executed trade records found in database."
+            else:
+                lines = [
+                    f"- **{t['symbol']}** ({t['side']}): Qty {t['quantity']} @ `Rs{t['entry_price']:.2f}` → Exit `Rs{t['exit_price'] or 0:.2f}` | P&L: `Rs{t['pnl']:+.2f}` ({t['pnl_pct']:+.2f}%)"
+                    for t in trades
+                ]
+                text = "### 📜 Recent Closed Trades\n\n" + "\n".join(lines)
+        elif any(k in msg_lower for k in ("risk", "drawdown", "rule", "setting", "limit", "overview")):
+            ov = get_market_overview()
+            tools_used.append({"tool": "get_market_overview", "args": {}, "result": ov})
+            text = (
+                f"### 🛡️ Risk & System Overview\n\n"
+                f"- **Capital:** `Rs{ov['capital']:,.2f}` | **Mode:** `{ov['mode'].upper()}`\n"
+                f"- **Max Position Size:** `{ov['risk_limits']['max_position_pct']}%`\n"
+                f"- **Max Daily Loss:** `{ov['risk_limits']['max_daily_loss_pct']}%`\n"
+                f"- **Stop Loss / Take Profit:** `{ov['risk_limits']['stop_loss_pct']}%` SL / `{ov['risk_limits']['take_profit_pct']}%` TP\n"
+                f"- **Active Strategies:** {', '.join(ov['active_strategies'])}"
+            )
         else:
             text = (
                 f"### 🤖 StockBot AI Assistant\n\n"
@@ -523,8 +561,8 @@ Guidelines:
                 f"- 📊 **\"What is my P&L today?\"** — Real-time performance & capital tracking\n"
                 f"- 💼 **\"Show my open positions\"** — Active trades, stop-losses, and trailing profits\n"
                 f"- ⚡ **\"What are today's signals?\"** — Strategy setups and AI explanations\n"
-                f"- 📰 **\"What is the market sentiment for RELIANCE?\"** — News & sentiment breakdown\n\n"
-                + (f"> ⚠️ *Note: Groq LLM API key not configured in `.env`. Falling back to direct database query mode.*" if not error_note else f"> ⚠️ *AI service notice: {error_note}*")
+                f"- 📰 **\"What is the market sentiment for RELIANCE?\"** — News & sentiment breakdown\n"
+                f"- 🛡️ **\"What are our risk limits?\"** — Stop-loss and maximum daily drawdown\n"
             )
 
         return {
