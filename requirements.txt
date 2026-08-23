@@ -1,0 +1,26 @@
+# Django
+django>=4.2,<5.0
+djangorestframework>=3.14.0
+django-cors-headers>=4.3.0
+python-dotenv>=1.0.0
+
+# Core
+pandas>=2.0.0
+numpy>=1.24.0
+pyyaml>=6.0
+schedule>=1.2.0
+
+# Technical Analysis
+pandas-ta>=0.3.14b1
+
+# Market Data
+yfinance>=0.2.36
+
+# Broker API
+smartapi-python>=1.5.0
+pyotp>=2.9.0
+logzero>=1.5.0
+websocket-client>=1.7.0
+
+# Logging
+rich>=13.0.0

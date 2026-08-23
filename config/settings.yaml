@@ -1,0 +1,87 @@
+mode: paper
+
+trading:
+  exchanges:
+    - NSE
+  segments:
+    - EQ
+  market_hours:
+    start: "09:15"
+    end: "15:30"
+    timezone: "Asia/Kolkata"
+
+risk:
+  capital: 5000
+  max_position_pct: 25.0
+  max_daily_loss_pct: 2.0
+  max_open_positions: 2
+  stop_loss_pct: 2.0
+  take_profit_pct: 4.0
+  max_orders_per_minute: 5
+  max_orders_per_day: 50
+  cooldown_after_loss_sec: 300
+
+strategies:
+  active:
+    - ema_crossover
+  available:
+    - ema_crossover
+    - rsi_reversal
+    - bollinger_breakout
+    - supertrend
+    - vwap
+  watchlist:
+    - RELIANCE
+    - TCS
+    - INFY
+    - HDFCBANK
+    - ICICIBANK
+    - SBIN
+    - BHARTIARTL
+    - ITC
+    - TATAMOTORS
+    - LT
+
+ema_crossover:
+  fast_period: 9
+  slow_period: 21
+  rsi_period: 14
+  rsi_oversold: 35
+  rsi_overbought: 70
+
+rsi_reversal:
+  rsi_period: 14
+  oversold: 30
+  overbought: 70
+  volume_mult: 1.5
+
+bollinger_breakout:
+  period: 20
+  std_dev: 2.0
+
+supertrend:
+  atr_period: 10
+  multiplier: 3.0
+
+vwap:
+  rsi_period: 14
+
+telegram:
+  enabled: false
+  bot_token: ""
+  chat_id: ""
+
+whatsapp:
+  enabled: false
+  phone: ""
+  api_key: ""
+
+backtesting:
+  initial_capital: 5000
+  commission_pct: 0.03
+  slippage_pct: 0.05
+  data_period: "2y"
+
+logging:
+  level: INFO
+  file: "logs/stockbot.log"

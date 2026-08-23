@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StockBot — Ultra-Premium Terminal Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=Cabinet+Grotesk:wght@700;800;900&display=swap" rel="stylesheet">
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    /* ==========================================================================
+       THEME SYSTEM (5 ULTRA-PREMIUM AESTHETICS)
+       ========================================================================== */
+    
+    /* 1. CYBERPUNK FINTECH (Default) */
+    :root {
+      --bg: #050711;
+      --bg-mesh: radial-gradient(at 15% 15%, rgba(0, 229, 255, 0.08) 0px, transparent 50%),
+                 radial-gradient(at 85% 85%, rgba(0, 230, 118, 0.06) 0px, transparent 50%),
+                 radial-gradient(at 50% 50%, rgba(13, 17, 38, 0.5) 0px, transparent 80%);
+      --surface: #0a0e21;
+      --surface-glass: rgba(10, 14, 33, 0.75);
+      --surface-card: rgba(14, 20, 48, 0.6);
+      --surface-hover: rgba(20, 28, 66, 0.7);
+      --border: rgba(0, 229, 255, 0.12);
+      --border-light: rgba(255, 255, 255, 0.1);
+      --border-glow: #00e5ff;
+      --text: #f0f4fc;
+      --text-muted: #8c9cb8;
+      --text-dim: #506180;
+      --accent: #00e5ff;
+      --accent-gradient: linear-gradient(135deg, #00e5ff 0%, #0066ff 100%);
+      --accent-glow: rgba(0, 229, 255, 0.25);
+      --green: #00e676;
+      --green-glow: rgba(0, 230, 118, 0.25);
+      --red: #ff2a6d;
+      --red-glow: rgba(255, 42, 109, 0.25);
+      --gold: #ffb703;
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    /* 2. MONACO PRIVATE WEALTH (Midnight Navy & Champagne 24K Gold) */
+    body.theme-gold {
+      --bg: #060913;
+      --bg-mesh: radial-gradient(at 20% 20%, rgba(245, 158, 11, 0.07) 0px, transparent 50%),
+                 radial-gradient(at 80% 80%, rgba(56, 189, 248, 0.05) 0px, transparent 50%);
+      --surface: #0c1222;
+      --surface-glass: rgba(12, 18, 34, 0.85);
+      --surface-card: rgba(18, 26, 48, 0.7);
+      --surface-hover: rgba(26, 38, 70, 0.8);
+      --border: rgba(245, 158, 11, 0.2);
+      --border-light: rgba(245, 158, 11, 0.1);
+      --border-glow: #f59e0b;
+      --text: #fefce8;
+      --text-muted: #cbd5e1;
+      --text-dim: #64748b;
+      --accent: #fbbf24;
+      --accent-gradient: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+      --accent-glow: rgba(245, 158, 11, 0.3);
+      --green: #10b981;
+      --green-glow: rgba(16, 185, 129, 0.25);
+      --red: #f43f5e;
+      --red-glow: rgba(244, 63, 94, 0.25);
+      --radius: 14px;
+      --radius-sm: 10px;
+    }
+
+    /* 3. SILICON VALLEY LINEAR (Onyx Black & Ultra-Minimalist Violet) */
+    body.theme-linear {
+      --bg: #090a0f;
+      --bg-mesh: radial-gradient(at 50% 0%, rgba(99, 102, 241, 0.07) 0px, transparent 60%);
+      --surface: #10121a;
+      --surface-glass: rgba(16, 18, 26, 0.9);
+      --surface-card: rgba(22, 25, 36, 0.6);
+      --surface-hover: rgba(28, 32, 48, 0.8);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-light: rgba(255, 255, 255, 0.04);
+      --border-glow: #6366f1;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #475569;
+      --accent: #818cf8;
+      --accent-gradient: linear-gradient(135deg, #818cf8 0%, #4f46e5 100%);
+      --accent-glow: rgba(99, 102, 241, 0.25);
+      --green: #22c55e;
+      --green-glow: rgba(34, 197, 94, 0.2);
+      --red: #f43f5e;
+      --red-glow: rgba(244, 63, 94, 0.2);
+      --radius: 8px;
+      --radius-sm: 6px;
+    }
+
+    /* 4. WALL STREET QUANT TERMINAL (Phosphor Hacker Matrix) */
+    body.theme-quant {
+      --bg: #030704;
+      --bg-mesh: radial-gradient(at 50% 50%, rgba(0, 255, 102, 0.05) 0px, transparent 70%);
+      --surface: #061008;
+      --surface-glass: rgba(6, 16, 8, 0.92);
+      --surface-card: rgba(10, 26, 14, 0.7);
+      --surface-hover: rgba(16, 38, 22, 0.8);
+      --border: rgba(0, 255, 102, 0.22);
+      --border-light: rgba(0, 255, 102, 0.1);
+      --border-glow: #00ff66;
+      --text: #e6fced;
+      --text-muted: #82b890;
+      --text-dim: #436e4f;
+      --accent: #00ff66;
+      --accent-gradient: linear-gradient(135deg, #00ff66 0%, #009933 100%);
+      --accent-glow: rgba(0, 255, 102, 0.3);
+      --green: #00ff66;
+      --green-glow: rgba(0, 255, 102, 0.3);
+      --red: #ff3344;
+      --red-glow: rgba(255, 51, 68, 0.3);
+      --radius: 4px;
+      --radius-sm: 3px;
+    }
+
+    /* 5. ALPINE LONDON PRO (Daylight Clean Luxury Mode) */
+    body.theme-light {
+      --bg: #f8fafc;
+      --bg-mesh: radial-gradient(at 10% 20%, rgba(14, 165, 233, 0.04) 0px, transparent 50%);
+      --surface: #ffffff;
+      --surface-glass: rgba(255, 255, 255, 0.95);
+      --surface-card: #ffffff;
+      --surface-hover: #f1f5f9;
+      --border: rgba(0, 0, 0, 0.08);
+      --border-light: rgba(0, 0, 0, 0.04);
+      --border-glow: #0284c7;
+      --text: #0f172a;
+      --text-muted: #475569;
+      --text-dim: #94a3b8;
+      --accent: #0284c7;
+      --accent-gradient: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+      --accent-glow: rgba(2, 132, 199, 0.2);
+      --green: #16a34a;
+      --green-glow: rgba(22, 163, 74, 0.15);
+      --red: #dc2626;
+      --red-glow: rgba(220, 38, 38, 0.15);
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: var(--bg);
+      background-image: var(--bg-mesh);
+      background-attachment: fixed;
+      color: var(--text);
+      line-height: 1.45;
+      min-height: 100vh;
+      display: flex;
+    }
+
+    /* ==========================================================================
+       FLOATING THEME SWITCHER BAR
+       ========================================================================== */
+    .top-theme-dock {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 10000;
+      background: rgba(4, 6, 15, 0.92);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 0.55rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    }
+
+    .dock-logo {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-family: 'Cabinet Grotesk', sans-serif;
+      font-weight: 800;
+      font-size: 1.1rem;
+      color: #fff;
+    }
+
+    .dock-logo-badge {
+      font-size: 0.65rem;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      background: rgba(0, 229, 255, 0.2);
+      color: #00e5ff;
+      border: 1px solid rgba(0, 229, 255, 0.4);
+    }
+
+    .theme-nav-pills {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 0.25rem 0.35rem;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .theme-pill-btn {
+      padding: 0.35rem 0.8rem;
+      font-size: 0.74rem;
+      font-weight: 600;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: #94a3b8;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      transition: all 0.2s ease;
+    }
+
+    .theme-pill-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .theme-pill-btn.active {
+      background: #ffffff;
+      color: #000000;
+      font-weight: 700;
+      box-shadow: 0 0 16px rgba(255, 255, 255, 0.4);
+    }
+
+    /* ==========================================================================
+       SIDEBAR
+       ========================================================================== */
+    .sidebar {
+      width: 220px;
+      background: var(--surface-glass);
+      backdrop-filter: blur(20px);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 4.8rem 1rem 1.5rem;
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      z-index: 100;
+    }
+
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .brand-icon-box {
+      width: 34px;
+      height: 34px;
+      border-radius: var(--radius-sm);
+      background: var(--accent-gradient);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.15rem;
+      color: #fff;
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.65rem 0.85rem;
+      color: var(--text-muted);
+      font-size: 0.86rem;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      margin-bottom: 0.3rem;
+      cursor: pointer;
+      border: 1px solid transparent;
+    }
+
+    .nav-item:hover {
+      color: var(--text);
+      background: var(--surface-hover);
+    }
+
+    .nav-item.active {
+      color: var(--accent);
+      background: rgba(0, 229, 255, 0.08);
+      border-color: var(--border);
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+
+    .pill-status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.45rem 0.75rem;
+      background: rgba(0, 230, 118, 0.08);
+      border: 1px solid rgba(0, 230, 118, 0.25);
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--green);
+    }
+
+    .pulse-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 0.8; }
+      50% { transform: scale(1.2); opacity: 1; }
+      100% { transform: scale(0.9); opacity: 0.8; }
+    }
+
+    /* ==========================================================================
+       MAIN VIEW CONTAINER
+       ========================================================================== */
+    .main-content {
+      flex: 1;
+      margin-left: 220px;
+      padding: 4.8rem 1.5rem 3rem;
+      width: calc(100vw - 220px);
+      max-width: calc(100vw - 220px);
+      box-sizing: border-box;
+    }
+
+    /* ==========================================================================
+       LIVE MARKET TICKER BAR
+       ========================================================================== */
+    .live-ticker-strip {
+      display: flex;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 1.25rem;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(16px);
+    }
+
+    .ticker-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.55rem 1rem;
+      background: rgba(0, 229, 255, 0.12);
+      border-right: 1px solid var(--border);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+      white-space: nowrap;
+    }
+
+    .ticker-scroll-content {
+      display: flex;
+      gap: 2rem;
+      padding: 0.55rem 1.25rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      white-space: nowrap;
+      overflow-x: auto;
+      width: 100%;
+    }
+
+    .ticker-item strong { color: var(--text); }
+    .ticker-item .pos { color: var(--green); font-weight: 700; margin-left: 0.3rem; }
+    .ticker-item .neg { color: var(--red); font-weight: 700; margin-left: 0.3rem; }
+
+    /* ==========================================================================
+       PAGE HEADER
+       ========================================================================== */
+    .page-title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 1.25rem;
+    }
+
+    .eyebrow-text {
+      font-size: 0.68rem;
+      font-weight: 800;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      display: block;
+      margin-bottom: 0.2rem;
+    }
+
+    .page-title {
+      font-family: 'Cabinet Grotesk', sans-serif;
+      font-size: 2rem;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+    }
+
+    /* ==========================================================================
+       6 STAT CARDS ROW
+       ========================================================================== */
+    .stats-6-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 0.55rem;
+      width: 100%;
+      margin-bottom: 1.25rem;
+    }
+
+    .card {
+      background: var(--surface-card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+      position: relative;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+      transition: all 0.2s ease;
+    }
+
+    .card:hover {
+      border-color: var(--border-glow);
+      box-shadow: 0 10px 35px rgba(0, 0, 0, 0.45), 0 0 20px var(--accent-glow);
+      transform: translateY(-2px);
+    }
+
+    .stat-box {
+      min-height: 96px;
+      padding: 0.75rem 0.7rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .stat-box::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--border);
+    }
+
+    .stat-box.positive::before { background: linear-gradient(90deg, var(--green), transparent); }
+    .stat-box.negative::before { background: linear-gradient(90deg, var(--red), transparent); }
+
+    .stat-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+    }
+
+    .stat-label {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .stat-icon {
+      font-size: 0.95rem;
+      filter: drop-shadow(0 0 6px var(--accent-glow));
+    }
+
+    .stat-number {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: clamp(0.95rem, 1.15vw, 1.3rem);
+      font-weight: 700;
+      color: var(--text);
+      margin-top: 0.15rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .stat-number.positive { color: var(--green); text-shadow: 0 0 12px var(--green-glow); }
+    .stat-number.negative { color: var(--red); text-shadow: 0 0 12px var(--red-glow); }
+
+    .stat-sub {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.68rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .badge-status-sm {
+      font-size: 0.6rem;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 0.05rem 0.35rem;
+      border-radius: 4px;
+      background: rgba(0, 229, 255, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(0, 229, 255, 0.3);
+    }
+
+    /* ==========================================================================
+       MIDDLE GRID (CHART & RECENT TRADES)
+       ========================================================================== */
+    .grid-2col {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.85rem;
+    }
+
+    .panel-header h2 {
+      font-family: 'Cabinet Grotesk', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 800;
+    }
+
+    .panel-header p {
+      font-size: 0.74rem;
+      color: var(--text-muted);
+    }
+
+    /* SVG CANDLESTICK GRAPHIC */
+    .chart-container {
+      background: #02040a;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.75rem;
+      height: 250px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .chart-legend {
+      position: absolute;
+      top: 12px;
+      left: 14px;
+      display: flex;
+      gap: 0.85rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 600;
+      z-index: 10;
+    }
+
+    .legend-tag {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .legend-color { width: 10px; height: 3px; border-radius: 2px; }
+
+    /* TABLE STYLES */
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    .trades-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+
+    .trades-table th {
+      text-align: left;
+      padding: 0.6rem 0.65rem;
+      font-size: 0.68rem;
+      color: var(--text-dim);
+      font-weight: 700;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      letter-spacing: 0.05em;
+    }
+
+    .trades-table td {
+      padding: 0.65rem 0.65rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .badge-side {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      background: rgba(0, 230, 118, 0.12);
+      color: var(--green);
+      border: 1px solid rgba(0, 230, 118, 0.3);
+    }
+
+    /* ==========================================================================
+       AUTOTRADER BOT SECTION
+       ========================================================================== */
+    .autotrader-box {
+      border: 1px solid var(--border-glow);
+      background: linear-gradient(135deg, rgba(14, 20, 48, 0.85) 0%, rgba(6, 9, 24, 0.95) 100%);
+      margin-bottom: 1.25rem;
+    }
+
+    .bot-status-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.65rem;
+      margin: 0.85rem 0;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.65rem 0.85rem;
+    }
+
+    .bot-stat-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .bot-stat-item span {
+      font-size: 0.64rem;
+      color: var(--text-dim);
+      font-weight: 700;
+    }
+
+    .bot-stat-item strong {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.05rem;
+      color: var(--text);
+    }
+
+    .bot-terminal {
+      background: #020308;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: var(--radius-sm);
+      padding: 0.65rem 0.85rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.76rem;
+      max-height: 110px;
+      overflow-y: auto;
+    }
+
+    .log-row {
+      display: flex;
+      gap: 0.5rem;
+      line-height: 1.4;
+      color: #94a3b8;
+    }
+
+    .log-row .t { color: var(--text-dim); }
+    .log-row.highlight { color: var(--accent); font-weight: 600; }
+    .log-row.success { color: var(--green); font-weight: 600; }
+
+    /* ==========================================================================
+       LOWER ROW (STRATEGIES & QUICK ACTIONS)
+       ========================================================================== */
+    .bottom-row-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 1rem;
+    }
+
+    .strat-chips-bar {
+      display: flex;
+      gap: 0.35rem;
+      overflow-x: auto;
+      padding-top: 0.25rem;
+    }
+
+    .strat-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.35rem 0.65rem;
+      font-size: 0.76rem;
+      font-weight: 600;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .strat-pill.active {
+      background: rgba(0, 229, 255, 0.12);
+      color: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+
+    .actions-bar {
+      display: flex;
+      gap: 0.35rem;
+    }
+
+    .action-btn {
+      padding: 0.35rem 0.55rem;
+      font-size: 0.76rem;
+      font-weight: 700;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      white-space: nowrap;
+      flex: 1;
+      text-align: center;
+    }
+
+    .action-btn.primary {
+      background: var(--accent-gradient);
+      color: #000;
+      border: none;
+    }
+
+    .action-btn.danger {
+      background: #dc2626;
+      color: #fff;
+      border: none;
+    }
+
+    /* RESPONSIVE */
+    @media (max-width: 1000px) {
+      .stats-6-grid { grid-template-columns: repeat(3, 1fr); }
+      .grid-2col, .bottom-row-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOP THEME SWITCHER DOCK -->
+  <header class="top-theme-dock">
+    <div class="dock-logo">
+      <span>⚡ StockBot Terminal</span>
+      <span class="dock-logo-badge">THEME PREVIEW LAB</span>
+    </div>
+
+    <!-- 5 THEME SWITCHER BUTTONS -->
+    <div class="theme-nav-pills">
+      <button class="theme-pill-btn active" onclick="applyTheme('cyber')">🌌 Cyber Cyan (Default)</button>
+      <button class="theme-pill-btn" onclick="applyTheme('gold')">👑 Monaco Royal Gold</button>
+      <button class="theme-pill-btn" onclick="applyTheme('linear')">🖤 Obsidian Linear</button>
+      <button class="theme-pill-btn" onclick="applyTheme('quant')">🟢 Matrix Quant</button>
+      <button class="theme-pill-btn" onclick="applyTheme('light')">☀️ London Pro Light</button>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon-box">⚡</div>
+      <div>
+        <strong style="font-family: 'Cabinet Grotesk', sans-serif; font-size: 1.15rem; display: block;">StockBot</strong>
+        <span style="font-size: 0.62rem; color: var(--accent); font-weight: 800; letter-spacing: 0.08em;">ALGO V2.5 PRO</span>
+      </div>
+    </div>
+    
+    <nav>
+      <div class="nav-item active">⊞ Dashboard</div>
+      <div class="nav-item">⚡ Signals Scanner</div>
+      <div class="nav-item">＄ Trades & Orders</div>
+      <div class="nav-item">📈 Backtest Engine</div>
+      <div class="nav-item">⚙️ Settings</div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="pill-status">
+        <span class="pulse-dot"></span>
+        <span>AutoBot: RUNNING</span>
+      </div>
+      <div class="pill-status" style="background: rgba(255, 255, 255, 0.04); border-color: var(--border); color: var(--text-muted);">
+        <span>Paper Mode (Active)</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN TERMINAL CONTENT -->
+  <main class="main-content">
+
+    <!-- LIVE MARKET TICKER STRIP -->
+    <div class="live-ticker-strip">
+      <div class="ticker-badge">● NSE LIVE</div>
+      <div class="ticker-scroll-content">
+        <span class="ticker-item"><strong>NIFTY 50</strong> 24,850.20 <span class="pos">+0.45%</span></span>
+        <span class="ticker-item"><strong>BANKNIFTY</strong> 51,280.40 <span class="pos">+0.32%</span></span>
+        <span class="ticker-item"><strong>RELIANCE</strong> ₹1,316.00 <span class="pos">+0.46%</span></span>
+        <span class="ticker-item"><strong>TCS</strong> ₹2,313.20 <span class="neg">-2.02%</span></span>
+        <span class="ticker-item"><strong>INFY</strong> ₹1,139.90 <span class="neg">-2.51%</span></span>
+        <span class="ticker-item"><strong>HDFCBANK</strong> ₹729.00 <span class="pos">+0.28%</span></span>
+        <span class="ticker-item"><strong>ICICIBANK</strong> ₹1,415.30 <span class="neg">-0.12%</span></span>
+        <span class="ticker-item"><strong>SBIN</strong> ₹861.20 <span class="neg">-0.61%</span></span>
+      </div>
+    </div>
+
+    <!-- PAGE TITLE -->
+    <div class="page-title-row">
+      <div>
+        <span class="eyebrow-text">QUANTITATIVE TRADING WORKSPACE</span>
+        <h1 class="page-title">Dashboard</h1>
+      </div>
+      <span style="font-size: 0.75rem; color: var(--green); display: flex; align-items: center; gap: 0.4rem; font-weight: 600;">
+        <span class="pulse-dot"></span> Live Socket Connected · Updated Just Now
+      </span>
+    </div>
+
+    <!-- 6 STAT CARDS ROW (1 SINGLE HORIZONTAL LINE) -->
+    <div class="stats-6-grid">
+      <article class="card stat-box positive">
+        <div class="stat-top"><span class="stat-label">Portfolio value</span><span class="stat-icon">💰</span></div>
+        <strong class="stat-number positive">₹5,000.00</strong>
+        <div class="stat-sub"><span>+0.00% from capital</span></div>
+      </article>
+
+      <article class="card stat-box">
+        <div class="stat-top"><span class="stat-label">Open positions</span><span class="stat-icon">⚡</span></div>
+        <strong class="stat-number">0</strong>
+        <div class="stat-sub"><span>Currently active</span><span class="badge-status-sm">IDLE</span></div>
+      </article>
+
+      <article class="card stat-box">
+        <div class="stat-top"><span class="stat-label">Unrealized P&L</span><span class="stat-icon">📈</span></div>
+        <strong class="stat-number">₹0.00</strong>
+        <div class="stat-sub"><span>Open position move</span></div>
+      </article>
+
+      <article class="card stat-box">
+        <div class="stat-top"><span class="stat-label">Realized P&L</span><span class="stat-icon">🎯</span></div>
+        <strong class="stat-number">₹0.00</strong>
+        <div class="stat-sub"><span>Closed trade result</span></div>
+      </article>
+
+      <article class="card stat-box">
+        <div class="stat-top"><span class="stat-label">Win rate</span><span class="stat-icon">🏆</span></div>
+        <strong class="stat-number">0%</strong>
+        <div class="stat-sub"><span>Across completed</span></div>
+      </article>
+
+      <article class="card stat-box negative">
+        <div class="stat-top"><span class="stat-label">Max drawdown</span><span class="stat-icon">🛡️</span></div>
+        <strong class="stat-number negative">0%</strong>
+        <div class="stat-sub"><span>Peak decline</span></div>
+      </article>
+    </div>
+
+    <!-- MIDDLE ROW (CANDLESTICK CHART + RECENT TRADES) -->
+    <div class="grid-2col">
+      
+      <!-- INTERACTIVE CANDLESTICK GRAPHIC PREVIEW -->
+      <article class="card">
+        <div class="panel-header">
+          <div>
+            <h2>RELIANCE · 15m Momentum Chart</h2>
+            <p>Supertrend (10, 3) + VWAP + EMA 9/21 Overlays</p>
+          </div>
+          <strong style="font-family: 'JetBrains Mono', monospace; font-size: 1.05rem; color: var(--green);">₹1,316.00 (+0.46%)</strong>
+        </div>
+
+        <div class="chart-container">
+          <div class="chart-legend">
+            <span class="legend-tag"><span class="legend-color" style="background: #00e5ff;"></span> EMA 9</span>
+            <span class="legend-tag"><span class="legend-color" style="background: #a855f7;"></span> EMA 21</span>
+            <span class="legend-tag"><span class="legend-color" style="background: #eab308;"></span> VWAP</span>
+            <span class="legend-tag"><span class="legend-color" style="background: var(--green);"></span> Supertrend (Bullish)</span>
+          </div>
+
+          <!-- HIGH-TECH SVG CANDLESTICK GRAPHIC -->
+          <svg width="100%" height="100%" viewBox="0 0 600 200" preserveAspectRatio="none" style="position: absolute; top: 0; left: 0; padding: 35px 15px 15px;">
+            <!-- Grid Lines -->
+            <line x1="0" y1="40" x2="600" y2="40" stroke="rgba(255,255,255,0.05)" stroke-dasharray="3 3"/>
+            <line x1="0" y1="90" x2="600" y2="90" stroke="rgba(255,255,255,0.05)" stroke-dasharray="3 3"/>
+            <line x1="0" y1="140" x2="600" y2="140" stroke="rgba(255,255,255,0.05)" stroke-dasharray="3 3"/>
+
+            <!-- Candlestick Wicks & Bodies -->
+            <!-- Candle 1 (Green) -->
+            <line x1="40" y1="110" x2="40" y2="170" stroke="#00e676" stroke-width="1.5"/>
+            <rect x="34" y="125" width="12" height="30" fill="#00e676" rx="1"/>
+            
+            <!-- Candle 2 (Red) -->
+            <line x1="80" y1="120" x2="80" y2="165" stroke="#ff2a6d" stroke-width="1.5"/>
+            <rect x="74" y="130" width="12" height="25" fill="#ff2a6d" rx="1"/>
+
+            <!-- Candle 3 (Green) -->
+            <line x1="120" y1="95" x2="120" y2="150" stroke="#00e676" stroke-width="1.5"/>
+            <rect x="114" y="105" width="12" height="35" fill="#00e676" rx="1"/>
+
+            <!-- Candle 4 (Green) -->
+            <line x1="160" y1="80" x2="160" y2="135" stroke="#00e676" stroke-width="1.5"/>
+            <rect x="154" y="90" width="12" height="30" fill="#00e676" rx="1"/>
+
+            <!-- Candle 5 (Red) -->
+            <line x1="200" y1="75" x2="200" y2="125" stroke="#ff2a6d" stroke-width="1.5"/>
+            <rect x="194" y="85" width="12" height="20" fill="#ff2a6d" rx="1"/>
+
+            <!-- Candle 6 (Green breakout) -->
+            <line x1="240" y1="50" x2="240" y2="110" stroke="#00e676" stroke-width="1.5"/>
+            <rect x="234" y="60" width="12" height="40" fill="#00e676" rx="1"/>
+
+            <!-- Candle 7 (Green) -->
+            <line x1="280" y1="40" x2="280" y2="95" stroke="#00e676" stroke-width="1.5"/>
+            <rect x="274" y="50" width="12" height="35" fill="#00e676" rx="1"/>
+
+            <!-- Candle 8 (Green) -->
+            <line x1="320" y1="35" x2="320" y2="85" stroke="#00e676" stroke-width="1.5"/>
+            <rect x="314" y="42" width="12" height="30" fill="#00e676" rx="1"/>
+
+            <!-- Candle 9 (Red) -->
+            <line x1="360" y1="45" x2="360" y2="95" stroke="#ff2a6d" stroke-width="1.5"/>
+            <rect x="354" y="52" width="12" height="25" fill="#ff2a6d" rx="1"/>
+
+            <!-- Candle 10 (Green) -->
+            <line x1="400" y1="30" x2="400" y2="80" stroke="#00e676" stroke-width="1.5"/>
+            <rect x="394" y="38" width="12" height="32" fill="#00e676" rx="1"/>
+
+            <!-- Candle 11 (Green) -->
+            <line x1="440" y1="20" x2="440" y2="70" stroke="#00e676" stroke-width="1.5"/>
+            <rect x="434" y="28" width="12" height="30" fill="#00e676" rx="1"/>
+
+            <!-- Candle 12 (Current Bullish Candle) -->
+            <line x1="480" y1="15" x2="480" y2="60" stroke="#00e676" stroke-width="2"/>
+            <rect x="474" y="22" width="12" height="28" fill="#00e676" rx="1" filter="drop-shadow(0 0 8px rgba(0,230,118,0.6))"/>
+
+            <!-- EMA 9 Line (Cyan) -->
+            <path d="M 40 145 Q 160 100, 240 75 T 360 55 T 480 30" fill="none" stroke="#00e5ff" stroke-width="2" filter="drop-shadow(0 0 4px #00e5ff)"/>
+
+            <!-- EMA 21 Line (Purple) -->
+            <path d="M 40 155 Q 160 120, 240 95 T 360 70 T 480 48" fill="none" stroke="#a855f7" stroke-width="2"/>
+
+            <!-- Volume Bars at Bottom -->
+            <rect x="36" y="170" width="8" height="15" fill="rgba(0,230,118,0.25)"/>
+            <rect x="76" y="175" width="8" height="10" fill="rgba(255,42,109,0.25)"/>
+            <rect x="116" y="165" width="8" height="20" fill="rgba(0,230,118,0.25)"/>
+            <rect x="156" y="160" width="8" height="25" fill="rgba(0,230,118,0.25)"/>
+            <rect x="196" y="172" width="8" height="13" fill="rgba(255,42,109,0.25)"/>
+            <rect x="236" y="145" width="8" height="40" fill="rgba(0,230,118,0.4)"/>
+            <rect x="276" y="155" width="8" height="30" fill="rgba(0,230,118,0.3)"/>
+            <rect x="316" y="160" width="8" height="25" fill="rgba(0,230,118,0.3)"/>
+            <rect x="356" y="170" width="8" height="15" fill="rgba(255,42,109,0.3)"/>
+            <rect x="396" y="152" width="8" height="33" fill="rgba(0,230,118,0.35)"/>
+            <rect x="436" y="148" width="8" height="37" fill="rgba(0,230,118,0.4)"/>
+            <rect x="476" y="140" width="8" height="45" fill="rgba(0,230,118,0.6)"/>
+          </svg>
+        </div>
+      </article>
+
+      <!-- RECENT TRADES PANEL -->
+      <article class="card">
+        <div class="panel-header">
+          <div>
+            <h2>Recent trades</h2>
+            <p>Your five latest trade records</p>
+          </div>
+          <a style="font-size: 0.74rem; color: var(--accent); font-weight: 700; text-decoration: none; cursor: pointer;">View all →</a>
+        </div>
+
+        <div class="table-container">
+          <table class="trades-table">
+            <thead>
+              <tr><th>Symbol</th><th>Side</th><th>P&L</th></tr>
+            </thead>
+            <tbody>
+              <tr><td style="font-family: 'JetBrains Mono', monospace; font-weight: 700;">RELIANCE</td><td><span class="badge-side">BUY</span></td><td style="font-family: 'JetBrains Mono', monospace; color: var(--red); font-weight: 700;">-₹25.55</td></tr>
+              <tr><td style="font-family: 'JetBrains Mono', monospace; font-weight: 700;">INFY</td><td><span class="badge-side">BUY</span></td><td style="font-family: 'JetBrains Mono', monospace; color: var(--green); font-weight: 700;">+₹140.00</td></tr>
+              <tr><td style="font-family: 'JetBrains Mono', monospace; font-weight: 700;">TCS</td><td><span class="badge-side">BUY</span></td><td style="font-family: 'JetBrains Mono', monospace; color: var(--green); font-weight: 700;">+₹310.20</td></tr>
+              <tr><td style="font-family: 'JetBrains Mono', monospace; font-weight: 700;">SBIN</td><td><span class="badge-side">BUY</span></td><td style="font-family: 'JetBrains Mono', monospace; color: var(--red); font-weight: 700;">-₹87.79</td></tr>
+              <tr><td style="font-family: 'JetBrains Mono', monospace; font-weight: 700;">HDFCBANK</td><td><span class="badge-side">BUY</span></td><td style="font-family: 'JetBrains Mono', monospace; color: var(--green); font-weight: 700;">+₹220.50</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+    </div>
+
+    <!-- AUTOTRADER BOT COMMAND CENTER -->
+    <article class="card autotrader-box">
+      <div class="panel-header">
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <div class="pulse-dot"></div>
+          <div>
+            <h2>🤖 Autonomous Auto-Trader Daemon</h2>
+            <p>Background worker scanning watchlist every 60s & trailing stop-loss</p>
+          </div>
+        </div>
+        <button class="action-btn danger" style="max-width: 140px; padding: 0.45rem 1rem;">⏹ Stop AutoBot</button>
+      </div>
+
+      <div class="bot-status-strip">
+        <div class="bot-stat-item"><span>TRADES TODAY</span><strong>4 EXECUTED</strong></div>
+        <div class="bot-stat-item"><span>ACTIVE POSITIONS</span><strong>1 HELD (INFY)</strong></div>
+        <div class="bot-stat-item"><span>TRAILING SL</span><strong>+1.0% LOCK-IN</strong></div>
+        <div class="bot-stat-item"><span>LAST SCAN</span><strong>15:30:12 IST</strong></div>
+      </div>
+
+      <div class="bot-terminal">
+        <div class="log-row success"><span class="t">[15:30:12]</span> ⚡ [BREAKOUT] INFY generated BUY via VWAP Momentum (Strength: 0.88)</div>
+        <div class="log-row highlight"><span class="t">[15:30:12]</span> ✅ [AUTO TRADE] Bought 2x INFY @ Rs1,139.90 (SL: Rs1,117.10, TP: Rs1,185.50)</div>
+        <div class="log-row"><span class="t">[15:30:13]</span> 📲 [ALERT] Dispatched Telegram & WhatsApp execution notifications</div>
+        <div class="log-row"><span class="t">[15:31:00]</span> 🛡️ [TRAILING SL] INFY Stop-Loss raised: Rs1,117.10 -> Rs1,128.50</div>
+      </div>
+    </article>
+
+    <!-- LOWER ROW (STRATEGIES & QUICK ACTIONS) -->
+    <div class="bottom-row-grid">
+      <article class="card">
+        <div class="panel-header">
+          <div><h2>Strategies</h2><p>Choose which algorithms evaluate stocks.</p></div>
+          <span style="font-size: 0.7rem; color: var(--accent); font-weight: 700;">1 ACTIVE</span>
+        </div>
+        <div class="strat-chips-bar">
+          <div class="strat-pill active">Ema Crossover</div>
+          <div class="strat-pill">Rsi Reversal</div>
+          <div class="strat-pill">Bollinger Breakout</div>
+          <div class="strat-pill">Supertrend</div>
+          <div class="strat-pill">Vwap</div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="panel-header">
+          <div><h2>Quick actions</h2><p>Move straight to the next task.</p></div>
+        </div>
+        <div class="actions-bar">
+          <button class="action-btn primary">Scan signals</button>
+          <button class="action-btn">Backtest</button>
+          <button class="action-btn">Trades</button>
+          <button class="action-btn">Refresh</button>
+          <button class="action-btn danger">Square off</button>
+        </div>
+      </article>
+    </div>
+
+  </main>
+
+  <!-- LIVE THEME SWITCHING SCRIPT -->
+  <script>
+    function applyTheme(themeName) {
+      document.body.className = '';
+      document.querySelectorAll('.theme-pill-btn').forEach(btn => btn.classList.remove('active'));
+
+      if (themeName === 'gold') {
+        document.body.classList.add('theme-gold');
+        document.querySelectorAll('.theme-pill-btn')[1].classList.add('active');
+      } else if (themeName === 'linear') {
+        document.body.classList.add('theme-linear');
+        document.querySelectorAll('.theme-pill-btn')[2].classList.add('active');
+      } else if (themeName === 'quant') {
+        document.body.classList.add('theme-quant');
+        document.querySelectorAll('.theme-pill-btn')[3].classList.add('active');
+      } else if (themeName === 'light') {
+        document.body.classList.add('theme-light');
+        document.querySelectorAll('.theme-pill-btn')[4].classList.add('active');
+      } else {
+        document.querySelectorAll('.theme-pill-btn')[0].classList.add('active');
+      }
+    }
+  </script>
+</body>
+</html>
