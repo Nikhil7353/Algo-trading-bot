@@ -72,7 +72,7 @@ class OpenAICompatibleClient(BaseAIClient):
         self.model = (
             model
             or os.getenv("AI_MODEL")
-            or ("llama-3.3-70b-versatile" if self.provider == "groq" else "gpt-4o-mini")
+            or ("openai/gpt-oss-120b" if self.provider == "groq" else "gpt-4o-mini")
         ).strip()
         self.timeout = int(os.getenv("AI_REQUEST_TIMEOUT", "20"))
 
