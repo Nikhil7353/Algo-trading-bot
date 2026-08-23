@@ -1,3 +1,8 @@
+from concurrent.futures import ThreadPoolExecutor, wait
+from decimal import Decimal
+import threading
+import time
+
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
@@ -28,9 +33,57 @@ class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
 
 
+_mtm_lock = threading.Lock()
+_last_mtm_at = 0.0
+
+
+def _mark_open_positions_to_market(timeout_seconds: float = 6.0) -> None:
+    """Refresh CMP / unrealized P&L for open lots. Must not block the dashboard."""
+    global _last_mtm_at
+    with _mtm_lock:
+        now = time.time()
+        if now - _last_mtm_at < 10:
+            return
+        _last_mtm_at = now
+
+    open_positions = list(Position.objects.filter(is_open=True))
+    if not open_positions:
+        return
+
+    fetcher = DataFetcher()
+
+    def _quote(pos):
+        price = fetcher.fetch_live_price(pos.symbol, allow_slow_fallback=False)
+        return pos, price
+
+    with ThreadPoolExecutor(max_workers=min(4, len(open_positions))) as pool:
+        futures = [pool.submit(_quote, pos) for pos in open_positions]
+        done, _pending = wait(futures, timeout=timeout_seconds)
+        for fut in done:
+            try:
+                pos, live_price = fut.result()
+            except Exception:
+                continue
+            if not live_price or live_price <= 0:
+                continue
+            try:
+                pos.current_price = Decimal(str(live_price))
+                if pos.side == "LONG":
+                    pos.unrealized_pnl = (pos.current_price - pos.entry_price) * pos.quantity
+                else:
+                    pos.unrealized_pnl = (pos.entry_price - pos.current_price) * pos.quantity
+                pos.save(update_fields=["current_price", "unrealized_pnl"])
+            except Exception:
+                continue
+
+
 class PositionViewSet(viewsets.ModelViewSet):
     queryset = Position.objects.all()
     serializer_class = PositionSerializer
+
+    def list(self, request, *args, **kwargs):
+        _mark_open_positions_to_market()
+        return super().list(request, *args, **kwargs)
 
 
 class TradeLogViewSet(viewsets.ModelViewSet):
@@ -45,7 +98,9 @@ class DailyPerformanceViewSet(viewsets.ModelViewSet):
 
 class PortfolioView(APIView):
     def get(self, request):
+        _mark_open_positions_to_market()
         rm = get_risk_manager()
+        rm.load_from_db()
         summary = rm.get_portfolio_summary()
         return Response(summary)
 
@@ -140,7 +195,7 @@ class ScanView(APIView):
 class ExecuteView(APIView):
     def post(self, request):
         symbol = request.data.get("symbol")
-        side = request.data.get("side")
+        side = str(request.data.get("side", "")).upper().strip()
         qty = int(request.data.get("quantity", 0))
         price = float(request.data.get("price", 0))
 
@@ -148,6 +203,7 @@ class ExecuteView(APIView):
             return Response({"error": "Missing fields: symbol, side, quantity, price"}, status=400)
 
         rm = get_risk_manager()
+        rm.load_from_db()
         approved, adj_qty, reason = rm.validate_signal(symbol, side, price)
 
         if not approved:

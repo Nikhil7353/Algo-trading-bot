@@ -125,7 +125,7 @@ class AutoTrader:
 
         # 2. Check risk constraints before evaluating new entries
         open_count = Position.objects.filter(is_open=True).count()
-        max_concurrent = getattr(settings, "max_open_positions", 2) or 2
+        max_concurrent = getattr(settings, "max_open_positions", 5) or 5
         if open_count >= max_concurrent:
             self.log(f"Max concurrent positions reached ({open_count}/{max_concurrent}). Skipping new entries.", "info")
             return

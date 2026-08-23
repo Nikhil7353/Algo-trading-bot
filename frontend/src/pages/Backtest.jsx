@@ -18,7 +18,7 @@ function Metric({ label, value, tone = '' }) {
 export default function Backtest() {
   const [symbol, setSymbol] = useState('');
   const [strategies, setStrategies] = useState(['ema_crossover']);
-  const [capital, setCapital] = useState(5000);
+  const [capital, setCapital] = useState(25000);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [available, setAvailable] = useState([]);
@@ -69,9 +69,8 @@ export default function Backtest() {
     <section className="backtest-page">
       <header className="page-heading backtest-heading">
         <div>
-          <span className="eyebrow">Historical simulation</span>
-          <h1>Backtest</h1>
-          <p className="page-subtitle">Test a strategy on historical data before acting on a live signal.</p>
+          <h1>Lab</h1>
+          <p className="page-subtitle">Historical run · no live orders</p>
         </div>
         <div className="mode-pill">
           <span className="mode-pulse"></span>
@@ -156,7 +155,7 @@ export default function Backtest() {
             <Metric label="Max drawdown" value={`${Number(result.max_drawdown_pct || 0).toFixed(2)}%`} tone="negative-text" />
           </div>
 
-          {chartData.length > 1 && <article className="card backtest-chart-card"><div className="panel-heading"><div><h2>Equity curve</h2><p>Portfolio value across the test period.</p></div></div><ResponsiveContainer width="100%" height={300}><LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 2 }}><XAxis dataKey="date" tick={{ fill: '#8990b0', fontSize: 11 }} minTickGap={36} /><YAxis tick={{ fill: '#8990b0', fontSize: 11 }} domain={['auto', 'auto']} width={62} /><Tooltip contentStyle={{ background: '#0c0e20', border: '1px solid #31375a', borderRadius: 6 }} formatter={(value) => formatCurrency(value)} /><ReferenceLine y={result.initial_capital} stroke="#596080" strokeDasharray="4 4" /><Line type="monotone" dataKey="equity" stroke="#00d4ff" strokeWidth={2.5} dot={false} /></LineChart></ResponsiveContainer></article>}
+          {chartData.length > 1 && <article className="card backtest-chart-card"><div className="panel-heading"><div><h2>Equity curve</h2><p>Portfolio value across the test period.</p></div></div><ResponsiveContainer width="100%" height={300}><LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 2 }}><XAxis dataKey="date" tick={{ fill: '#b3a6d4', fontSize: 11 }} minTickGap={36} /><YAxis tick={{ fill: '#b3a6d4', fontSize: 11 }} domain={['auto', 'auto']} width={62} /><Tooltip contentStyle={{ background: 'rgba(12, 10, 36, 0.92)', border: '1px solid rgba(255,255,255,0.16)', borderRadius: 12 }} formatter={(value) => formatCurrency(value)} /><ReferenceLine y={result.initial_capital} stroke="#b3a6d4" strokeDasharray="4 4" /><Line type="monotone" dataKey="equity" stroke="#c4b5fd" strokeWidth={2.5} dot={false} /></LineChart></ResponsiveContainer></article>}
 
           {result.trades?.length > 0 && <article className="card backtest-trades-card"><div className="panel-heading"><div><h2>Trade details</h2><p>{result.trades.length} simulated trade{result.trades.length === 1 ? '' : 's'}.</p></div></div><div className="table-scroll"><table className="table history-table"><thead><tr><th>Entry date</th><th>Exit date</th><th>Side</th><th>Entry</th><th>Exit</th><th>Qty</th><th>P&amp;L</th><th>P&amp;L %</th></tr></thead><tbody>{result.trades.map((trade, index) => { const pnl = Number(trade.pnl || 0); const pnlPct = Number(trade.pnl_pct || 0); return <tr key={`${trade.entry_date}-${index}`}><td className="mono">{trade.entry_date || '—'}</td><td className="mono">{trade.exit_date || '—'}</td><td><span className={`signal-badge ${(trade.side || '').toLowerCase()}`}>{trade.side || '—'}</span></td><td className="mono">{formatCurrency(trade.entry_price)}</td><td className="mono">{formatCurrency(trade.exit_price)}</td><td className="mono">{trade.qty ?? trade.quantity ?? '—'}</td><td className={`mono pnl-value ${pnl > 0 ? 'positive' : pnl < 0 ? 'negative' : ''}`}>{formatCurrency(pnl)}</td><td className={`mono pnl-value ${pnlPct > 0 ? 'positive' : pnlPct < 0 ? 'negative' : ''}`}>{pnlPct.toFixed(2)}%</td></tr>; })}</tbody></table></div></article>}
         </section>

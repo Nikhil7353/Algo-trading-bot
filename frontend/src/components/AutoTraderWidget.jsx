@@ -25,7 +25,7 @@ export default function AutoTraderWidget({ compact = false }) {
 
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 4000);
+    const interval = setInterval(fetchStatus, 10_000);
     return () => clearInterval(interval);
   }, [fetchStatus]);
 

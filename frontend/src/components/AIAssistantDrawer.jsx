@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { api } from '../api';
 
 const QUICK_PROMPTS = [
@@ -10,6 +11,8 @@ const QUICK_PROMPTS = [
 ];
 
 export default function AIAssistantDrawer() {
+  const location = useLocation();
+  const hideFab = location.pathname === '/assistant' || location.pathname === '/';
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     {
@@ -21,18 +24,19 @@ export default function AIAssistantDrawer() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState({ available: false, model: 'llama-3.3-70b-versatile', provider: 'groq' });
-  const messagesEndRef = useRef(null);
+  const chatBoxRef = useRef(null);
 
   useEffect(() => {
+    if (!isOpen) return;
     api.getAssistantStatus()
       .then((data) => setStatus(data))
       .catch(() => {});
-  }, []);
+  }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
+    if (!isOpen) return;
+    const box = chatBoxRef.current;
+    if (box) box.scrollTop = box.scrollHeight;
   }, [messages, isOpen]);
 
   const handleSend = async (userText = null) => {
@@ -116,6 +120,8 @@ export default function AIAssistantDrawer() {
       .replace(/`(.*?)`/g, '<code style="background: rgba(255,255,255,0.08); padding: 0.15rem 0.35rem; border-radius: 4px; font-size: 0.82rem;">$1</code>');
   };
 
+  if (hideFab) return null;
+
   return (
     <>
       {/* Floating Launcher Button */}
@@ -131,7 +137,7 @@ export default function AIAssistantDrawer() {
           width: '54px',
           height: '54px',
           borderRadius: '50%',
-          background: 'linear-gradient(135deg, #6366f1 0%, #38bdf8 100%)',
+          background: 'linear-gradient(135deg, #c4b5fd 0%, #2dd4bf 100%)',
           color: '#fff',
           border: 'none',
           boxShadow: '0 8px 24px rgba(99, 102, 241, 0.45)',
@@ -141,7 +147,7 @@ export default function AIAssistantDrawer() {
           justifyContent: 'center',
           zIndex: 999,
           transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-          transform: isOpen ? 'scale(0.9) rotate(45deg)' : 'scale(1)',
+          transform: isOpen ? 'scale(0.94)' : 'scale(1)',
         }}
       >
         {isOpen ? (
@@ -167,10 +173,10 @@ export default function AIAssistantDrawer() {
             position: 'fixed',
             bottom: '5.5rem',
             right: '1.75rem',
-            width: '420px',
+            width: '360px',
             maxWidth: 'calc(100vw - 2.5rem)',
-            height: '620px',
-            maxHeight: 'calc(100vh - 7rem)',
+            height: '340px',
+            maxHeight: 'min(340px, calc(100vh - 9rem))',
             zIndex: 998,
             display: 'flex',
             flexDirection: 'column',
@@ -198,7 +204,7 @@ export default function AIAssistantDrawer() {
                   width: '32px',
                   height: '32px',
                   borderRadius: '8px',
-                  background: 'linear-gradient(135deg, #6366f1 0%, #38bdf8 100%)',
+                  background: 'linear-gradient(135deg, #c4b5fd 0%, #2dd4bf 100%)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -232,6 +238,7 @@ export default function AIAssistantDrawer() {
 
           {/* Chat Messages */}
           <div
+            ref={chatBoxRef}
             style={{
               flex: 1,
               overflowY: 'auto',
@@ -250,39 +257,15 @@ export default function AIAssistantDrawer() {
                   alignItems: m.role === 'user' ? 'flex-end' : 'flex-start',
                 }}
               >
-                {/* Tool Badges */}
-                {m.tools_used && m.tools_used.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', marginBottom: '0.3rem' }}>
-                    {m.tools_used.map((t, tidx) => (
-                      <span
-                        key={tidx}
-                        style={{
-                          fontSize: '0.68rem',
-                          background: 'rgba(99, 102, 241, 0.15)',
-                          color: '#818cf8',
-                          border: '1px solid rgba(99, 102, 241, 0.3)',
-                          borderRadius: '4px',
-                          padding: '0.15rem 0.4rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.25rem',
-                        }}
-                      >
-                        ⚡ <code>{t.tool}()</code>
-                      </span>
-                    ))}
-                  </div>
-                )}
-
                 {/* Message Bubble */}
                 <div
                   style={{
                     maxWidth: '88%',
                     padding: '0.75rem 1rem',
                     borderRadius: m.role === 'user' ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
-                    background: m.role === 'user' ? 'linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%)' : 'rgba(255, 255, 255, 0.05)',
+                    background: m.role === 'user' ? 'linear-gradient(135deg, #c4b5fd 0%, #2dd4bf 100%)' : 'rgba(255, 255, 255, 0.05)',
                     border: m.role === 'user' ? 'none' : '1px solid rgba(255, 255, 255, 0.08)',
-                    color: '#fff',
+                    color: m.role === 'user' ? '#0b0618' : '#fff',
                     fontSize: '0.86rem',
                   }}
                 >
@@ -297,7 +280,6 @@ export default function AIAssistantDrawer() {
                 <span>Thinking & querying portfolio tools…</span>
               </div>
             )}
-            <div ref={messagesEndRef} />
           </div>
 
           {/* Suggested Quick Prompts */}

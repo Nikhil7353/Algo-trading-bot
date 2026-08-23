@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 
 const ALL_STRATEGIES = [
@@ -10,6 +11,7 @@ const ALL_STRATEGIES = [
 ];
 
 export default function Settings() {
+  const navigate = useNavigate();
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -182,14 +184,28 @@ export default function Settings() {
     <section className="settings-page" style={{ width: '100%' }}>
       <header className="page-heading">
         <div>
-          <span className="eyebrow">SYSTEM CONFIGURATION</span>
-          <h1>Settings</h1>
-          <p className="page-subtitle">Manage trading capital, risk parameters, active strategies, Telegram & WhatsApp notifications.</p>
+          <h1>Controls</h1>
+          <p className="page-subtitle">Capital, risk envelope, strategies, alerts</p>
         </div>
         <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
           {saving ? 'Saving changes…' : 'Save Configuration'}
         </button>
       </header>
+
+      <article className="card" style={{ marginBottom: '1.25rem' }}>
+        <div className="panel-heading">
+          <div>
+            <h2>Quick actions</h2>
+            <p>Jump to the next desk without leaving risk settings behind.</p>
+          </div>
+        </div>
+        <div className="quick-actions">
+          <button type="button" className="btn btn-primary" onClick={() => navigate('/signals')}>Scan signals</button>
+          <button type="button" className="btn btn-secondary" onClick={() => navigate('/backtest')}>Lab</button>
+          <button type="button" className="btn btn-secondary" onClick={() => navigate('/trades')}>Book</button>
+          <button type="button" className="btn btn-secondary" onClick={() => navigate('/assistant')}>Copilot</button>
+        </div>
+      </article>
 
       {statusMsg.text && (
         <div className={`dashboard-alert ${statusMsg.type === 'error' ? '' : 'alert-success'}`} style={{ marginBottom: '1.5rem', background: statusMsg.type === 'error' ? 'rgba(255, 51, 102, 0.15)' : 'rgba(0, 230, 118, 0.15)', borderColor: statusMsg.type === 'error' ? 'var(--red)' : 'var(--green)', color: '#fff' }}>

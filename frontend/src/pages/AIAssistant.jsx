@@ -1,31 +1,36 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../api';
 
-const QUICK_PROMPTS = [
-  "What is my overall P&L and win rate?",
-  "Analyze open positions and trailing risk",
-  "Summarize today's strategy signals",
-  "Show latest sentiment for RELIANCE & TCS",
-  "How are our daily drawdown limits holding up?",
+const PROMPT_CATEGORIES = [
+  { label: '📊 Portfolio & P&L', prompt: 'What is my overall P&L, current capital, and win rate?' },
+  { label: '⚡ Top Signals', prompt: "What are today's top strategy signals and why were they triggered?" },
+  { label: '💼 Open Positions', prompt: 'Show all my active open positions and trailing risk.' },
+  { label: '📰 Market Sentiment', prompt: 'Summarize news sentiment across RELIANCE, TCS, and INFY.' },
+  { label: '🛡️ Risk Limits', prompt: 'What are our current stop-loss and daily drawdown rules?' },
 ];
 
 export default function AIAssistant() {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: "👋 Welcome to the **StockBot AI Command Center**!\n\nI am connected directly to your trading database, risk engine, and market data feeds. You can query me about your live positions, past trade logs, strategy setups, or stock news sentiment in natural language.",
+      content: "👋 Welcome to the **StockBot AI Command Center**!\n\nI am connected directly to your PostgreSQL trading database, risk engine, and live market feeds. Ask me about your real-time portfolio P&L, active positions, strategy signals, or news sentiment.",
       tools_used: [],
     },
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState({ available: false, model: 'llama-3.3-70b-versatile', provider: 'groq' });
+  const [status, setStatus] = useState({ available: false, model: 'openai/gpt-oss-20b', provider: 'groq' });
   const [sentiments, setSentiments] = useState([]);
   const [refreshingSentiment, setRefreshingSentiment] = useState(false);
+  const [sentimentFilter, setSentimentFilter] = useState('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [rightTab, setRightTab] = useState('sentiment'); // 'sentiment' | 'journal'
   const [journal, setJournal] = useState(null);
   const [generatingJournal, setGeneratingJournal] = useState(false);
   const [activeNewsModal, setActiveNewsModal] = useState(null);
-  const chatEndRef = useRef(null);
+  const [activeToolModal, setActiveToolModal] = useState(null);
+  const [copiedIndex, setCopiedIndex] = useState(null);
+  const chatBoxRef = useRef(null);
 
   useEffect(() => {
     loadStatus();
@@ -34,7 +39,9 @@ export default function AIAssistant() {
   }, []);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const box = chatBoxRef.current;
+    if (!box) return;
+    box.scrollTop = box.scrollHeight;
   }, [messages]);
 
   const loadStatus = () => {
@@ -75,6 +82,7 @@ export default function AIAssistant() {
     try {
       const res = await api.generateDailySummary(true);
       if (res.journal) setJournal(res.journal);
+      setRightTab('journal');
     } catch (err) {
       console.error(err);
     } finally {
@@ -120,98 +128,197 @@ export default function AIAssistant() {
     }
   };
 
+  const handleCopy = (text, idx) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIndex(idx);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
+  const filteredSentiments = useMemo(() => {
+    return sentiments.filter((s) => {
+      const matchesFilter =
+        sentimentFilter === 'ALL' ||
+        (sentimentFilter === 'BULLISH' && s.sentiment === 'BULLISH') ||
+        (sentimentFilter === 'BEARISH' && s.sentiment === 'BEARISH') ||
+        (sentimentFilter === 'NEUTRAL' && s.sentiment === 'NEUTRAL');
+
+      const matchesSearch =
+        !searchQuery.trim() ||
+        s.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.rationale.toLowerCase().includes(searchQuery.toLowerCase());
+
+      return matchesFilter && matchesSearch;
+    });
+  }, [sentiments, sentimentFilter, searchQuery]);
+
+  const sentimentCounts = useMemo(() => {
+    const counts = { ALL: sentiments.length, BULLISH: 0, BEARISH: 0, NEUTRAL: 0 };
+    sentiments.forEach((s) => {
+      if (counts[s.sentiment] !== undefined) counts[s.sentiment]++;
+    });
+    return counts;
+  }, [sentiments]);
+
   const formatInline = (text) => {
     return text
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/`(.*?)`/g, '<code style="background: rgba(255,255,255,0.08); padding: 0.15rem 0.35rem; border-radius: 4px; font-size: 0.84rem;">$1</code>');
+      .replace(/`(.*?)`/g, '<code style="background: rgba(255,255,255,0.08); padding: 0.15rem 0.35rem; border-radius: 4px; font-size: 0.84rem; color: #a5b4fc;">$1</code>');
   };
 
   const renderContent = (content) => {
-    return content.split('\n').map((line, i) => {
-      if (line.startsWith('### ')) {
-        return <h4 key={i} style={{ margin: '0.75rem 0 0.4rem', fontSize: '1rem', color: 'var(--accent)' }}>{line.replace('### ', '')}</h4>;
+    const lines = content.split('\n');
+    const elements = [];
+    let inTable = false;
+    let tableRows = [];
+
+    const flushTable = (key) => {
+      if (tableRows.length === 0) return;
+      const [headerRow, ...bodyRows] = tableRows;
+      const headers = headerRow.split('|').map((h) => h.trim()).filter((h) => h !== '');
+      const validBodyRows = bodyRows.filter((r) => !r.includes('---'));
+
+      elements.push(
+        <div key={key} style={{ overflowX: 'auto', margin: '0.75rem 0', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', textAlign: 'left' }}>
+            <thead>
+              <tr style={{ background: 'rgba(99, 102, 241, 0.15)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                {headers.map((h, hidx) => (
+                  <th key={hidx} style={{ padding: '0.55rem 0.75rem', fontWeight: 600, color: 'var(--text-bright)' }}>
+                    <span dangerouslySetInnerHTML={{ __html: formatInline(h) }} />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {validBodyRows.map((row, ridx) => {
+                const cols = row.split('|').map((c) => c.trim()).filter((c) => c !== '');
+                return (
+                  <tr key={ridx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: ridx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
+                    {cols.map((col, cidx) => (
+                      <td key={cidx} style={{ padding: '0.5rem 0.75rem', color: 'var(--text-dim)' }}>
+                        <span dangerouslySetInnerHTML={{ __html: formatInline(col) }} />
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      );
+      tableRows = [];
+      inTable = false;
+    };
+
+    lines.forEach((line, i) => {
+      if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
+        inTable = true;
+        tableRows.push(line.trim());
+        return;
       }
-      if (line.startsWith('- ')) {
-        return (
-          <div key={i} style={{ display: 'flex', gap: '0.4rem', margin: '0.25rem 0', paddingLeft: '0.5rem' }}>
-            <span>•</span>
+
+      if (inTable) {
+        flushTable(`table-${i}`);
+      }
+
+      if (line.startsWith('### ')) {
+        elements.push(<h4 key={i} style={{ margin: '0.75rem 0 0.35rem', fontSize: '0.98rem', color: 'var(--accent)' }}>{line.replace('### ', '')}</h4>);
+      } else if (line.startsWith('## ')) {
+        elements.push(<h3 key={i} style={{ margin: '0.85rem 0 0.4rem', fontSize: '1.08rem', color: 'var(--text-bright)' }}>{line.replace('## ', '')}</h3>);
+      } else if (line.startsWith('- ')) {
+        elements.push(
+          <div key={i} style={{ display: 'flex', gap: '0.45rem', margin: '0.22rem 0', paddingLeft: '0.4rem' }}>
+            <span style={{ color: 'var(--accent)' }}>•</span>
             <span dangerouslySetInnerHTML={{ __html: formatInline(line.substring(2)) }} />
           </div>
         );
-      }
-      if (line.startsWith('> ')) {
-        return (
-          <blockquote key={i} style={{ borderLeft: '3px solid var(--accent)', margin: '0.5rem 0', paddingLeft: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+      } else if (line.startsWith('> ')) {
+        elements.push(
+          <blockquote key={i} style={{ borderLeft: '3px solid var(--accent)', margin: '0.5rem 0', paddingLeft: '0.75rem', color: 'var(--text-muted)', fontSize: '0.84rem' }}>
             <span dangerouslySetInnerHTML={{ __html: formatInline(line.substring(2)) }} />
           </blockquote>
         );
+      } else if (line.trim()) {
+        elements.push(
+          <p key={i} style={{ margin: '0.35rem 0', lineHeight: 1.5 }} dangerouslySetInnerHTML={{ __html: formatInline(line) }} />
+        );
       }
-      return (
-        <p key={i} style={{ margin: '0.4rem 0', lineHeight: 1.5 }} dangerouslySetInnerHTML={{ __html: formatInline(line) }} />
-      );
     });
+
+    if (inTable) {
+      flushTable('table-end');
+    }
+
+    return elements;
   };
 
   const getSentimentBadge = (sent) => {
-    if (sent === 'BULLISH') {
-      return <span className="badge badge-buy" style={{ fontSize: '0.72rem' }}>🟢 BULLISH</span>;
-    }
-    if (sent === 'BEARISH') {
-      return <span className="badge badge-sell" style={{ fontSize: '0.72rem' }}>🔴 BEARISH</span>;
-    }
-    return <span className="badge badge-neutral" style={{ fontSize: '0.72rem' }}>⚪ NEUTRAL</span>;
+    if (sent === 'BULLISH') return <span className="badge badge-buy" style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}>🟢 BULLISH</span>;
+    if (sent === 'BEARISH') return <span className="badge badge-sell" style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}>🔴 BEARISH</span>;
+    return <span className="badge badge-neutral" style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}>⚪ NEUTRAL</span>;
   };
 
   return (
     <div className="page-container" style={{ maxWidth: '1440px', margin: '0 auto', paddingBottom: '2.5rem' }}>
-      {/* Top Banner */}
-      <div className="page-header" style={{ marginBottom: '1.25rem' }}>
+      {/* Top Header Banner */}
+      <div className="page-header" style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-            ✨ AI Assistant & Intelligence Hub
-            <span className="badge" style={{ fontSize: '0.72rem', background: status.available ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)', color: status.available ? 'var(--green)' : '#eab308', border: `1px solid ${status.available ? 'rgba(34, 197, 94, 0.3)' : 'rgba(234, 179, 8, 0.3)'}` }}>
-              {status.available ? '⚡ GROQ ENGINE ACTIVE' : '⚠️ LOCAL FALLBACK MODE'}
-            </span>
-          </h1>
-          <p className="page-desc">
-            Natural language conversational assistant with real database tool calling, watchlist sentiment feeds, and automated daily journals.
+          <h1 style={{ margin: '0 0 0.25rem' }}>Copilot</h1>
+          <p className="page-subtitle" style={{ margin: 0 }}>
+            Desk chat with ledger tools · watchlist sentiment is in the right rail · {status.available ? 'Groq live' : 'local fallback'}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center' }}>
           <button
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={handleGenerateJournal}
             disabled={generatingJournal}
+            style={{ fontSize: '0.8rem' }}
           >
             {generatingJournal ? 'Generating EOD Summary…' : '📝 Generate Daily Journal'}
           </button>
         </div>
       </div>
 
-      {/* Main Grid: Left Chat, Right Analytics */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.35fr) minmax(0, 1fr)', gap: '1.25rem', alignItems: 'start' }}>
+      {/* Main Grid: Left Chat, Right Analytics Panel */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.3fr) minmax(0, 1fr)', gap: '1.25rem', alignItems: 'start' }}>
         
-        {/* LEFT COLUMN: AI Chat Assistant */}
-        <article className="card" style={{ height: '760px', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
+        {/* LEFT COLUMN: Conversational Agent */}
+        <article className="card" style={{ height: '780px', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
           {/* Chat Header */}
           <div
             style={{
               padding: '1rem 1.25rem',
-              background: 'rgba(255, 255, 255, 0.02)',
+              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(56, 189, 248, 0.08) 100%)',
               borderBottom: '1px solid var(--border-color)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-              <span style={{ fontSize: '1.2rem' }}>🤖</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '10px',
+                  background: 'linear-gradient(135deg, #c4b5fd 0%, #2dd4bf 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  fontSize: '1.1rem',
+                  boxShadow: '0 4px 12px rgba(99, 102, 241, 0.35)',
+                }}
+              >
+                🤖
+              </div>
               <div>
-                <strong style={{ fontSize: '0.95rem' }}>StockBot AI Conversational Agent</strong>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                  Model: <code>{status.model}</code> | Provider: <code>{status.provider}</code>
+                <strong style={{ fontSize: '0.96rem', color: 'var(--text-bright)' }}>StockBot AI Conversational Agent</strong>
+                <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                  Model: <code style={{ color: '#818cf8' }}>{status.model}</code> | Provider: <code style={{ color: '#38bdf8' }}>{status.provider}</code>
                 </div>
               </div>
             </div>
@@ -219,14 +326,14 @@ export default function AIAssistant() {
               type="button"
               className="btn btn-secondary btn-sm"
               onClick={() => setMessages([{ role: 'assistant', content: 'Conversation reset. How can I assist you with your trading operations today?', tools_used: [] }])}
-              style={{ fontSize: '0.72rem', padding: '0.25rem 0.5rem' }}
+              style={{ fontSize: '0.74rem', padding: '0.3rem 0.65rem' }}
             >
               Clear Chat
             </button>
           </div>
 
-          {/* Messages Area */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {/* Messages Container */}
+          <div ref={chatBoxRef} style={{ flex: 1, overflowY: 'auto', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
             {messages.map((m, idx) => (
               <div
                 key={idx}
@@ -236,62 +343,62 @@ export default function AIAssistant() {
                   alignItems: m.role === 'user' ? 'flex-end' : 'flex-start',
                 }}
               >
-                {/* Tool Executions Badge */}
-                {m.tools_used && m.tools_used.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.4rem' }}>
-                    {m.tools_used.map((t, tidx) => (
-                      <span
-                        key={tidx}
-                        style={{
-                          fontSize: '0.7rem',
-                          background: 'rgba(99, 102, 241, 0.15)',
-                          color: '#818cf8',
-                          border: '1px solid rgba(99, 102, 241, 0.3)',
-                          borderRadius: '4px',
-                          padding: '0.15rem 0.45rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.25rem',
-                        }}
-                      >
-                        ⚡ <code>{t.tool}()</code>
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Message Bubble */}
+                {/* Message Box */}
                 <div
                   style={{
-                    maxWidth: '85%',
-                    padding: '0.85rem 1.15rem',
-                    borderRadius: m.role === 'user' ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
-                    background: m.role === 'user' ? 'linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%)' : 'rgba(255, 255, 255, 0.04)',
+                    position: 'relative',
+                    maxWidth: '88%',
+                    padding: '0.9rem 1.25rem',
+                    borderRadius: m.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                    background: m.role === 'user' ? 'linear-gradient(135deg, #c4b5fd 0%, #2dd4bf 100%)' : 'rgba(255, 255, 255, 0.04)',
                     border: m.role === 'user' ? 'none' : '1px solid rgba(255, 255, 255, 0.08)',
-                    color: '#fff',
+                    boxShadow: m.role === 'user' ? '0 4px 14px rgba(124, 58, 237, 0.3)' : '0 2px 8px rgba(0, 0, 0, 0.2)',
+                    color: m.role === 'user' ? '#0b0618' : '#fff',
                     fontSize: '0.88rem',
                   }}
                 >
                   {renderContent(m.content)}
+
+                  {/* Copy Button on Assistant Messages */}
+                  {m.role === 'assistant' && idx > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(m.content, idx)}
+                      style={{
+                        position: 'absolute',
+                        top: '0.5rem',
+                        right: '0.5rem',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '0.2rem 0.4rem',
+                        fontSize: '0.7rem',
+                        color: copiedIndex === idx ? 'var(--green)' : 'var(--text-muted)',
+                        cursor: 'pointer',
+                      }}
+                      title="Copy response"
+                    >
+                      {copiedIndex === idx ? '✓ Copied' : '📋'}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
 
             {loading && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.8rem', color: 'var(--text-muted)', fontSize: '0.84rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 0.9rem', background: 'rgba(99, 102, 241, 0.08)', borderRadius: '8px', border: '1px solid rgba(99, 102, 241, 0.2)', width: 'fit-content' }}>
                 <span className="mode-pulse"></span>
-                <span>Executing tools and formulating response…</span>
+                <span style={{ fontSize: '0.84rem', color: '#a5b4fc' }}>Executing tools and formulating response…</span>
               </div>
             )}
-            <div ref={chatEndRef} />
           </div>
 
-          {/* Quick Prompts Bar */}
+          {/* Categorized Quick Prompts */}
           <div
             style={{
-              padding: '0.6rem 1rem',
-              background: 'rgba(0, 0, 0, 0.2)',
-              borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+              padding: '0.65rem 1rem',
+              background: 'rgba(0, 0, 0, 0.25)',
+              borderTop: '1px solid rgba(255, 255, 255, 0.06)',
               display: 'flex',
               gap: '0.45rem',
               overflowX: 'auto',
@@ -299,36 +406,37 @@ export default function AIAssistant() {
               scrollbarWidth: 'none',
             }}
           >
-            {QUICK_PROMPTS.map((qp, idx) => (
+            {PROMPT_CATEGORIES.map((cat, idx) => (
               <button
                 key={idx}
                 type="button"
                 className="btn btn-secondary btn-sm"
-                onClick={() => handleSend(qp)}
+                onClick={() => handleSend(cat.prompt)}
                 style={{
                   fontSize: '0.74rem',
-                  padding: '0.3rem 0.65rem',
+                  padding: '0.35rem 0.75rem',
                   borderRadius: '12px',
                   background: 'rgba(255, 255, 255, 0.04)',
                   border: '1px solid rgba(255, 255, 255, 0.08)',
                   color: 'var(--text-dim)',
                   cursor: 'pointer',
                   flexShrink: 0,
+                  transition: 'all 0.2s ease',
                 }}
               >
-                {qp}
+                {cat.label}
               </button>
             ))}
           </div>
 
-          {/* Chat Input */}
+          {/* Chat Input Box */}
           <div
             style={{
-              padding: '0.85rem 1.15rem',
+              padding: '0.9rem 1.25rem',
               borderTop: '1px solid var(--border-color)',
-              background: 'rgba(0, 0, 0, 0.3)',
+              background: 'rgba(0, 0, 0, 0.35)',
               display: 'flex',
-              gap: '0.65rem',
+              gap: '0.75rem',
             }}
           >
             <input
@@ -337,156 +445,259 @@ export default function AIAssistant() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleSend(); }}
-              placeholder="Ask anything about trades, P&L, signals, or market sentiment…"
+              placeholder="Ask about your P&L, open positions, signals, or market sentiment…"
               disabled={loading}
-              style={{ flex: 1, padding: '0.65rem 1rem', fontSize: '0.88rem' }}
+              style={{ flex: 1, padding: '0.7rem 1.1rem', fontSize: '0.9rem', borderRadius: '8px' }}
             />
             <button
               type="button"
-              className="btn btn-primary btn-sm"
+              className="btn btn-primary"
               onClick={() => handleSend()}
               disabled={loading || !input.trim()}
-              style={{ padding: '0.65rem 1.25rem' }}
+              style={{ padding: '0.7rem 1.4rem', fontWeight: 600 }}
             >
               {loading ? '…' : 'Ask AI'}
             </button>
           </div>
         </article>
 
-        {/* RIGHT COLUMN: Sentiment Matrix + Daily Journal */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        {/* RIGHT COLUMN: Tabbed Intelligence Panel */}
+        <article className="card" style={{ height: '780px', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
           
-          {/* 1. Watchlist News Sentiment Card */}
-          <article className="card">
-            <div className="panel-heading">
-              <div>
-                <h2>📰 Watchlist News & Sentiment Matrix</h2>
-                <p>Real-time NLP sentiment scoring & headline tracking across watchlist equities.</p>
-              </div>
+          {/* Right Panel Tabs */}
+          <div
+            style={{
+              padding: '0.75rem 1.25rem',
+              background: 'rgba(255, 255, 255, 0.02)',
+              borderBottom: '1px solid var(--border-color)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.5rem',
+            }}
+          >
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                type="button"
+                className={`tab ${rightTab === 'sentiment' ? 'active' : ''}`}
+                onClick={() => setRightTab('sentiment')}
+                style={{ fontSize: '0.82rem', padding: '0.4rem 0.85rem' }}
+              >
+                📰 Watchlist Sentiment ({sentiments.length})
+              </button>
+              <button
+                type="button"
+                className={`tab ${rightTab === 'journal' ? 'active' : ''}`}
+                onClick={() => setRightTab('journal')}
+                style={{ fontSize: '0.82rem', padding: '0.4rem 0.85rem' }}
+              >
+                📊 Daily Journal {journal && `(${journal.date})`}
+              </button>
+            </div>
+
+            {rightTab === 'sentiment' ? (
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={handleRefreshSentiment}
                 disabled={refreshingSentiment}
-                style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem' }}
+                style={{ fontSize: '0.74rem', padding: '0.3rem 0.65rem' }}
               >
-                {refreshingSentiment ? 'Scanning Headlines…' : '🔄 Refresh Feeds'}
+                {refreshingSentiment ? 'Scanning…' : '🔄 Refresh'}
               </button>
-            </div>
-
-            {sentiments.length === 0 ? (
-              <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                No sentiment data available. Click "Refresh Feeds" to fetch news headlines for your watchlist.
-              </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginTop: '0.5rem' }}>
-                {sentiments.map((s, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      padding: '0.75rem 1rem',
-                      background: 'rgba(255, 255, 255, 0.02)',
-                      border: '1px solid rgba(255, 255, 255, 0.06)',
-                      borderRadius: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '0.75rem',
-                    }}
-                  >
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                        <strong style={{ fontSize: '0.92rem' }}>{s.symbol}</strong>
-                        {getSentimentBadge(s.sentiment)}
-                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                          Score: {s.score > 0 ? `+${s.score.toFixed(2)}` : s.score.toFixed(2)}
-                        </span>
-                      </div>
-                      <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-dim)', lineHeight: 1.35 }}>
-                        {s.rationale}
-                      </p>
-                    </div>
-
-                    {s.headlines && s.headlines.length > 0 && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => setActiveNewsModal(s)}
-                        style={{ fontSize: '0.72rem', padding: '0.25rem 0.5rem', flexShrink: 0 }}
-                      >
-                        Headlines ({s.headlines.length})
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleGenerateJournal}
+                disabled={generatingJournal}
+                style={{ fontSize: '0.74rem', padding: '0.3rem 0.65rem' }}
+              >
+                {generatingJournal ? 'Summarizing…' : '⚡ Refresh Journal'}
+              </button>
             )}
-          </article>
+          </div>
 
-          {/* 2. Daily Performance Journal Card */}
-          <article className="card">
-            <div className="panel-heading">
-              <div>
-                <h2>📊 AI Daily Trading Journal</h2>
-                <p>Executive performance review & risk takeaway log.</p>
-              </div>
-              {journal && (
-                <span className="badge" style={{ fontSize: '0.72rem', background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8' }}>
-                  {journal.date}
-                </span>
-              )}
-            </div>
+          {/* TAB 1: WATCHLIST SENTIMENT MATRIX */}
+          {rightTab === 'sentiment' && (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              
+              {/* Search & Filter Controls */}
+              <div style={{ padding: '0.75rem 1.25rem', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0, 0, 0, 0.15)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <input
+                  type="text"
+                  className="input"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="🔍 Search stock ticker (e.g. RELIANCE, TCS)…"
+                  style={{ padding: '0.45rem 0.85rem', fontSize: '0.82rem', width: '100%' }}
+                />
 
-            {!journal ? (
-              <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                No journal generated for today. Click "Generate Daily Journal" above to summarize today's session.
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                {/* Metric Summary Bar */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.65rem' }}>
-                  <div style={{ padding: '0.65rem 0.85rem', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Net Realized P&L</div>
-                    <div style={{ fontSize: '1rem', fontWeight: 700, color: journal.total_pnl >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                      Rs{journal.total_pnl >= 0 ? `+${journal.total_pnl.toFixed(2)}` : journal.total_pnl.toFixed(2)}
-                    </div>
-                  </div>
-                  <div style={{ padding: '0.65rem 0.85rem', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Win Rate</div>
-                    <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-bright)' }}>
-                      {journal.win_rate.toFixed(1)}%
-                    </div>
-                  </div>
-                  <div style={{ padding: '0.65rem 0.85rem', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Trades (W/L)</div>
-                    <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-bright)' }}>
-                      {journal.winning_trades}W / {journal.losing_trades}L ({journal.trades_count})
-                    </div>
-                  </div>
-                </div>
-
-                {/* Narrative Summary */}
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)', lineHeight: 1.5, background: 'rgba(0, 0, 0, 0.15)', padding: '0.85rem 1rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
-                  {journal.summary.split('\n').map((p, pidx) => (
-                    <p key={pidx} style={{ margin: '0.35rem 0' }}>{p}</p>
+                {/* Filter Pills */}
+                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                  {[
+                    { key: 'ALL', label: `All (${sentimentCounts.ALL})` },
+                    { key: 'BULLISH', label: `🟢 Bullish (${sentimentCounts.BULLISH})` },
+                    { key: 'BEARISH', label: `🔴 Bearish (${sentimentCounts.BEARISH})` },
+                    { key: 'NEUTRAL', label: `⚪ Neutral (${sentimentCounts.NEUTRAL})` },
+                  ].map((f) => (
+                    <button
+                      key={f.key}
+                      type="button"
+                      onClick={() => setSentimentFilter(f.key)}
+                      style={{
+                        fontSize: '0.72rem',
+                        padding: '0.2rem 0.55rem',
+                        borderRadius: '12px',
+                        background: sentimentFilter === f.key ? 'var(--accent)' : 'rgba(255,255,255,0.04)',
+                        color: sentimentFilter === f.key ? '#fff' : 'var(--text-dim)',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {f.label}
+                    </button>
                   ))}
                 </div>
+              </div>
 
-                {/* Key Takeaways */}
-                {journal.key_takeaways && journal.key_takeaways.length > 0 && (
-                  <div>
-                    <h4 style={{ margin: '0.4rem 0 0.3rem', fontSize: '0.82rem', color: 'var(--accent)' }}>Key Takeaways & Discipline</h4>
-                    <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.8rem', color: 'var(--text-dim)' }}>
-                      {journal.key_takeaways.map((k, kidx) => (
-                        <li key={kidx} style={{ margin: '0.2rem 0' }}>{k}</li>
-                      ))}
-                    </ul>
+              {/* Sentiment Items Scrollable List */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {filteredSentiments.length === 0 ? (
+                  <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.86rem' }}>
+                    {searchQuery ? 'No stocks match your search filter.' : 'No sentiment data found. Click "Refresh" above.'}
                   </div>
+                ) : (
+                  filteredSentiments.map((s, idx) => {
+                    const score = Number(s.score || 0);
+                    // Score percentage: map -1.0..+1.0 to 0%..100%
+                    const scorePct = Math.max(0, Math.min(100, (score + 1.0) * 50));
+                    const isBull = s.sentiment === 'BULLISH';
+                    const isBear = s.sentiment === 'BEARISH';
+                    const barColor = isBull ? '#22c55e' : isBear ? '#ef4444' : '#94a3b8';
+
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          padding: '0.85rem 1rem',
+                          background: 'rgba(255, 255, 255, 0.02)',
+                          border: '1px solid rgba(255, 255, 255, 0.06)',
+                          borderRadius: '10px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.45rem',
+                          transition: 'border-color 0.2s',
+                        }}
+                      >
+                        {/* Top Line */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                            <strong style={{ fontSize: '0.98rem', color: 'var(--text-bright)' }}>{s.symbol}</strong>
+                            {getSentimentBadge(s.sentiment)}
+                          </div>
+                          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: barColor }}>
+                            Score: {score > 0 ? `+${score.toFixed(2)}` : score.toFixed(2)}
+                          </span>
+                        </div>
+
+                        {/* Visual Sentiment Gauge Bar */}
+                        <div style={{ position: 'relative', height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
+                          <div
+                            style={{
+                              position: 'absolute',
+                              left: 0,
+                              top: 0,
+                              height: '100%',
+                              width: `${scorePct}%`,
+                              background: `linear-gradient(90deg, #ef4444 0%, #eab308 50%, #22c55e 100%)`,
+                              borderRadius: '3px',
+                            }}
+                          />
+                        </div>
+
+                        {/* Rationale & Action */}
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem', marginTop: '0.2rem' }}>
+                          <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-dim)', lineHeight: 1.35, flex: 1 }}>
+                            {s.rationale}
+                          </p>
+
+                          {s.headlines && s.headlines.length > 0 && (
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => setActiveNewsModal(s)}
+                              style={{ fontSize: '0.72rem', padding: '0.25rem 0.55rem', flexShrink: 0 }}
+                            >
+                              Headlines ({s.headlines.length})
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
               </div>
-            )}
-          </article>
-        </div>
+            </div>
+          )}
+
+          {/* TAB 2: DAILY PERFORMANCE JOURNAL */}
+          {rightTab === 'journal' && (
+            <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {!journal ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.86rem' }}>
+                  No journal generated for today. Click "Refresh Journal" to summarize the session.
+                </div>
+              ) : (
+                <>
+                  {/* Summary Metric Cards */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.65rem' }}>
+                    <div style={{ padding: '0.75rem', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Net Realized P&L</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 700, color: journal.total_pnl >= 0 ? 'var(--green)' : 'var(--red)', marginTop: '0.15rem' }}>
+                        Rs{journal.total_pnl >= 0 ? `+${journal.total_pnl.toFixed(2)}` : journal.total_pnl.toFixed(2)}
+                      </div>
+                    </div>
+                    <div style={{ padding: '0.75rem', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Win Rate</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-bright)', marginTop: '0.15rem' }}>
+                        {journal.win_rate.toFixed(1)}%
+                      </div>
+                    </div>
+                    <div style={{ padding: '0.75rem', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Trades (W/L)</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-bright)', marginTop: '0.15rem' }}>
+                        {journal.winning_trades}W / {journal.losing_trades}L ({journal.trades_count})
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Executive Narrative */}
+                  <div style={{ background: 'rgba(0, 0, 0, 0.2)', padding: '1rem 1.15rem', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                    <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.88rem', color: 'var(--accent)' }}>Executive Narrative</h4>
+                    {journal.summary.split('\n').map((p, pidx) => (
+                      <p key={pidx} style={{ margin: '0.4rem 0', fontSize: '0.85rem', color: 'var(--text-dim)', lineHeight: 1.5 }}>
+                        {p}
+                      </p>
+                    ))}
+                  </div>
+
+                  {/* Key Takeaways */}
+                  {journal.key_takeaways && journal.key_takeaways.length > 0 && (
+                    <div style={{ background: 'rgba(99, 102, 241, 0.04)', padding: '0.85rem 1.15rem', borderRadius: '10px', border: '1px solid rgba(99, 102, 241, 0.15)' }}>
+                      <h4 style={{ margin: '0 0 0.4rem', fontSize: '0.84rem', color: '#818cf8' }}>Quantitative Risk Takeaways</h4>
+                      <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.82rem', color: 'var(--text-bright)' }}>
+                        {journal.key_takeaways.map((k, kidx) => (
+                          <li key={kidx} style={{ margin: '0.3rem 0' }}>{k}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </article>
       </div>
 
       {/* News Modal */}
@@ -512,28 +723,76 @@ export default function AIAssistant() {
           >
             <div className="panel-heading" style={{ marginBottom: '1rem' }}>
               <div>
-                <h2>📰 {activeNewsModal.symbol} Headlines</h2>
-                <p>Tracked news articles analyzed by AI.</p>
+                <h2>📰 {activeNewsModal.symbol} Tracked Headlines</h2>
+                <p>Real-time news feeds analyzed by Groq AI NLP model.</p>
               </div>
               <button type="button" className="btn btn-icon btn-sm" onClick={() => setActiveNewsModal(null)}>✕</button>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
               {activeNewsModal.headlines.map((h, idx) => (
-                <div key={idx} style={{ padding: '0.75rem', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '6px' }}>
-                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-bright)', marginBottom: '0.2rem' }}>
+                <div key={idx} style={{ padding: '0.8rem', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-bright)', marginBottom: '0.3rem' }}>
                     {h.title}
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem', color: 'var(--text-muted)' }}>
                     <span>{h.date}</span>
                     {h.link && (
-                      <a href={h.link} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
-                        Read Article ↗
+                      <a href={h.link} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>
+                        Read Original Article ↗
                       </a>
                     )}
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tool Inspection Modal */}
+      {activeToolModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '1.5rem',
+          }}
+          onClick={() => setActiveToolModal(null)}
+        >
+          <div
+            className="card"
+            style={{ width: '560px', maxWidth: '100%', maxHeight: '80vh', overflowY: 'auto' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="panel-heading" style={{ marginBottom: '1rem' }}>
+              <div>
+                <h2>⚡ Tool Execution Trace: <code>{activeToolModal.tool}()</code></h2>
+                <p>Live parameters and PostgreSQL database response inspected by LLM.</p>
+              </div>
+              <button type="button" className="btn btn-icon btn-sm" onClick={() => setActiveToolModal(null)}>✕</button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div>
+                <strong style={{ fontSize: '0.82rem', color: 'var(--accent)' }}>Arguments Passed:</strong>
+                <pre style={{ background: 'rgba(0,0,0,0.4)', padding: '0.75rem', borderRadius: '6px', fontSize: '0.78rem', color: '#a5b4fc', overflowX: 'auto', margin: '0.3rem 0 0' }}>
+                  {JSON.stringify(activeToolModal.args || {}, null, 2)}
+                </pre>
+              </div>
+
+              <div>
+                <strong style={{ fontSize: '0.82rem', color: 'var(--accent)' }}>Database Result Preview:</strong>
+                <pre style={{ background: 'rgba(0,0,0,0.4)', padding: '0.75rem', borderRadius: '6px', fontSize: '0.78rem', color: '#38bdf8', overflowX: 'auto', margin: '0.3rem 0 0', whiteSpace: 'pre-wrap' }}>
+                  {activeToolModal.result_preview || JSON.stringify(activeToolModal.result || {}, null, 2)}
+                </pre>
+              </div>
             </div>
           </div>
         </div>

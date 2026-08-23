@@ -1,88 +1,88 @@
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
-import Dashboard from './pages/Dashboard';
-import Signals from './pages/Signals';
-import Trades from './pages/Trades';
-import Backtest from './pages/Backtest';
-import Settings from './pages/Settings';
-import AIAssistant from './pages/AIAssistant';
 import MarketTicker from './components/MarketTicker';
 import AutoTraderWidget from './components/AutoTraderWidget';
 import AIAssistantDrawer from './components/AIAssistantDrawer';
+import { api } from './api';
 import './App.css';
+
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Signals = lazy(() => import('./pages/Signals'));
+const Trades = lazy(() => import('./pages/Trades'));
+const Backtest = lazy(() => import('./pages/Backtest'));
+const Settings = lazy(() => import('./pages/Settings'));
+const AIAssistant = lazy(() => import('./pages/AIAssistant'));
+
+function formatCurrency(value) {
+  return `₹${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function RouteFallback() {
+  return (
+    <section className="dashboard-page" aria-busy="true">
+      <p className="muted-copy" style={{ padding: '1.5rem 0' }}>Loading desk…</p>
+    </section>
+  );
+}
+
+function SidebarEquity() {
+  const [portfolio, setPortfolio] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    const load = () => {
+      api.portfolio()
+        .then((data) => { if (alive) setPortfolio(data); })
+        .catch(() => {});
+    };
+    const start = setTimeout(load, 0);
+    const timer = setInterval(load, 30_000);
+    return () => { alive = false; clearTimeout(start); clearInterval(timer); };
+  }, []);
+
+  const equity = Number(portfolio?.current_capital || 25000);
+  const cash = Number(portfolio?.available_cash || 0);
+  const invested = Number(portfolio?.invested_capital || 0);
+  const lots = Number(portfolio?.open_positions || 0);
+  const deployed = equity > 0 ? Math.min(100, (invested / equity) * 100) : 0;
+
+  return (
+    <div className="sidebar-acct">
+      <div className="sidebar-acct-row">
+        <span>Paper equity</span>
+        <span className="sidebar-acct-live"><i className="mode-pulse" /> live</span>
+      </div>
+      <strong className="mono">{formatCurrency(equity)}</strong>
+      <div className="sidebar-acct-row">
+        <span>Cash {formatCurrency(cash)}</span>
+        <span>{lots} lot{lots === 1 ? '' : 's'}</span>
+      </div>
+      <div className="meter"><i style={{ width: `${deployed.toFixed(0)}%` }} /></div>
+      <div className="sidebar-acct-row">
+        <span>{deployed.toFixed(0)}% deployed</span>
+        <span>risk 2%</span>
+      </div>
+    </div>
+  );
+}
 
 function Sidebar() {
   const links = [
-    {
-      to: '/',
-      label: 'Dashboard',
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="3" width="7" height="9"></rect>
-          <rect x="14" y="3" width="7" height="5"></rect>
-          <rect x="14" y="12" width="7" height="9"></rect>
-          <rect x="3" y="16" width="7" height="5"></rect>
-        </svg>
-      ),
-    },
-    {
-      to: '/assistant',
-      label: 'AI Assistant',
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"></path>
-          <rect x="4" y="8" width="16" height="12" rx="2"></rect>
-          <path d="M9 13v2"></path>
-          <path d="M15 13v2"></path>
-        </svg>
-      ),
-    },
-    {
-      to: '/signals',
-      label: 'Signals',
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-        </svg>
-      ),
-    },
-    {
-      to: '/trades',
-      label: 'Trades',
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="12" y1="1" x2="12" y2="23"></line>
-          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-        </svg>
-      ),
-    },
-    {
-      to: '/backtest',
-      label: 'Backtest',
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-        </svg>
-      ),
-    },
-    {
-      to: '/settings',
-      label: 'Settings',
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-        </svg>
-      ),
-    },
+    { to: '/', label: 'Overview', end: true },
+    { to: '/signals', label: 'Scanner' },
+    { to: '/trades', label: 'Book' },
+    { to: '/backtest', label: 'Lab' },
+    { to: '/settings', label: 'Controls' },
+    { to: '/assistant', label: 'Copilot' },
   ];
 
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <div className="brand-icon">⚡</div>
+        <div className="brand-icon" />
         <div className="logo-text">
-          <span className="logo-title">StockBot</span>
-          <span className="logo-badge">ALGO v2</span>
+          <span className="logo-title">Aether Desk</span>
+          <span className="logo-badge">Aurora · live</span>
         </div>
       </div>
       <nav className="sidebar-nav">
@@ -90,20 +90,16 @@ function Sidebar() {
           <NavLink
             key={l.to}
             to={l.to}
-            className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
-            end={l.to === '/'}
+            className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}
+            end={l.end}
           >
-            <span className="nav-icon">{l.icon}</span>
             <span className="nav-text">{l.label}</span>
           </NavLink>
         ))}
       </nav>
       <div className="sidebar-footer">
         <AutoTraderWidget compact />
-        <div className="mode-pill" style={{ marginTop: '0.45rem' }}>
-          <span className="mode-pulse"></span>
-          <span>Paper Mode (Active)</span>
-        </div>
+        <SidebarEquity />
       </div>
     </aside>
   );
@@ -112,20 +108,31 @@ function Sidebar() {
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="app">
-        <Sidebar />
-        <main className="main">
-          <MarketTicker />
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/assistant" element={<AIAssistant />} />
-            <Route path="/signals" element={<Signals />} />
-            <Route path="/trades" element={<Trades />} />
-            <Route path="/backtest" element={<Backtest />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
-          <AIAssistantDrawer />
-        </main>
+      <div className="app-stage">
+        <div className="aurora-orbs" aria-hidden="true">
+          <span className="orb a" />
+          <span className="orb b" />
+          <span className="orb c" />
+        </div>
+        <div className="app">
+          <Sidebar />
+          <main className="main">
+            <MarketTicker />
+            <div className="main-body">
+              <Suspense fallback={<RouteFallback />}>
+                <Routes>
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/assistant" element={<AIAssistant />} />
+                  <Route path="/signals" element={<Signals />} />
+                  <Route path="/trades" element={<Trades />} />
+                  <Route path="/backtest" element={<Backtest />} />
+                  <Route path="/settings" element={<Settings />} />
+                </Routes>
+              </Suspense>
+            </div>
+            <AIAssistantDrawer />
+          </main>
+        </div>
       </div>
     </BrowserRouter>
   );

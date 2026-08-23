@@ -308,7 +308,12 @@ class DataFetcher:
             trade_log.log_error(f"Angel Historical for {symbol}", e)
         return pd.DataFrame()
 
-    def fetch_live_price(self, symbol: str, exchange: str = "NSE") -> Optional[float]:
+    def fetch_live_price(
+        self,
+        symbol: str,
+        exchange: str = "NSE",
+        allow_slow_fallback: bool = True,
+    ) -> Optional[float]:
         clean_symbol = symbol.upper().replace(".NS", "").replace(".BO", "").strip()
 
         # If live mode and connected, use Angel One LTP
@@ -329,12 +334,16 @@ class DataFetcher:
             fast_info = getattr(ticker, "fast_info", None)
             if fast_info and "lastPrice" in fast_info and fast_info["lastPrice"] is not None:
                 return float(fast_info["lastPrice"])
-            
-            hist = ticker.history(period="1d", interval="1m")
-            if not hist.empty:
-                return float(hist["Close"].iloc[-1])
+
+            if allow_slow_fallback:
+                hist = ticker.history(period="1d", interval="1m")
+                if not hist.empty:
+                    return float(hist["Close"].iloc[-1])
         except Exception:
             pass
+
+        if not allow_slow_fallback:
+            return None
 
         # Fallback to last available historical price
         df = self.fetch_historical(clean_symbol, days=5)

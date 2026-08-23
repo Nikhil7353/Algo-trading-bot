@@ -58,28 +58,65 @@ class RiskManager:
         self._loss_cooldown_until: Optional[datetime] = None
 
     def load_from_db(self):
-        """Restore positions and state from the database."""
+        """Restore positions and state cleanly from the database without cumulative subtraction."""
         try:
-            from core.models import Position as PositionModel
+            from core.models import Position as PositionModel, TradeLog as TradeLogModel
+            settings = get_settings()
+            self.capital = float(settings.capital or 25000)
+            self.max_position_pct = float(settings.max_position_pct or 25.0)
+            self.max_daily_loss_pct = float(settings.max_daily_loss_pct or 5.0)
+            self.max_open_positions = int(settings.max_open_positions or 5)
+
+            # Rebuild open positions map
+            self.positions.clear()
+            invested = 0.0
+            unrealized = 0.0
+
             for db_pos in PositionModel.objects.filter(is_open=True):
+                pos_entry = float(db_pos.entry_price)
+                pos_qty = int(db_pos.quantity)
+                pos_cmp = float(db_pos.current_price or db_pos.entry_price)
+                pos_sl = float(db_pos.stop_loss or 0)
+                pos_tp = float(db_pos.take_profit or 0)
+
+                pos_pnl = (pos_cmp - pos_entry) * pos_qty if db_pos.side == "LONG" else (pos_entry - pos_cmp) * pos_qty
+                invested += pos_entry * pos_qty
+                unrealized += pos_pnl
+
                 self.positions[db_pos.symbol] = Position(
                     symbol=db_pos.symbol,
                     side="BUY" if db_pos.side == "LONG" else "SELL",
-                    quantity=db_pos.quantity,
-                    entry_price=float(db_pos.entry_price),
+                    quantity=pos_qty,
+                    entry_price=pos_entry,
                     entry_time=db_pos.opened_at if db_pos.opened_at else timezone.now(),
-                    stop_loss=float(db_pos.stop_loss),
-                    take_profit=float(db_pos.take_profit),
-                    current_price=float(db_pos.current_price),
+                    stop_loss=pos_sl,
+                    take_profit=pos_tp,
+                    current_price=pos_cmp,
                 )
-                self.current_capital -= float(db_pos.entry_price) * db_pos.quantity
-            trade_log.logger.info(f"Loaded {len(self.positions)} open positions from DB")
+
+            # Calculate today's realized trades
+            today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            today_trades = TradeLogModel.objects.filter(created_at__gte=today_start)
+            if today_trades.exists():
+                self.daily_pnl = float(sum(t.pnl for t in today_trades))
+                self.winning_trades = today_trades.filter(pnl__gt=0).count()
+                self.losing_trades = today_trades.filter(pnl__lt=0).count()
+                self.daily_orders = today_trades.count()
+
+            # Total account equity = initial capital + realized PnL + unrealized PnL
+            self.current_capital = self.capital + self.daily_pnl + unrealized
+
+            trade_log.logger.info(f"Loaded {len(self.positions)} open positions from DB (Equity: Rs{self.current_capital:.2f})")
         except Exception as e:
             trade_log.log_error("RiskManager DB load", e)
 
     def can_trade(self, now=None, opening: bool = True) -> tuple:
         if now is None:
             now = timezone.now()
+
+        settings = get_settings()
+        self.max_open_positions = settings.max_open_positions
+        self.max_daily_loss_pct = settings.max_daily_loss_pct
 
         if self._loss_cooldown_until and now < self._loss_cooldown_until:
             remaining = (self._loss_cooldown_until - now).total_seconds()
@@ -220,7 +257,7 @@ class RiskManager:
             )
             TradeLog.objects.create(
                 symbol=pos.symbol,
-                side=pos.side,
+                side="SELL" if pos.side in ("BUY", "LONG") else "BUY",
                 quantity=pos.quantity,
                 entry_price=pos.entry_price,
                 exit_price=exit_price,
@@ -309,10 +346,15 @@ class RiskManager:
 
     def get_portfolio_summary(self) -> dict:
         unrealized = sum(p.unrealized_pnl for p in self.positions.values())
+        invested = sum(p.entry_price * p.quantity for p in self.positions.values())
+        total_equity = self.capital + self.daily_pnl + unrealized
+        available_cash = max(0.0, self.capital + self.daily_pnl - invested)
         total_trades = self.winning_trades + self.losing_trades
         return {
             "initial_capital": self.capital,
-            "current_capital": round(self.current_capital, 2),
+            "current_capital": round(total_equity, 2),
+            "available_cash": round(available_cash, 2),
+            "invested_capital": round(invested, 2),
             "open_positions": len(self.positions),
             "unrealized_pnl": round(unrealized, 2),
             "realized_pnl": round(self.daily_pnl, 2),

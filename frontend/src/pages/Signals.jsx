@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import CandlestickChart from '../components/CandlestickChart';
@@ -44,8 +44,20 @@ export default function Signals() {
   const [screenerResults, setScreenerResults] = useState([]);
   const [screenerLoading, setScreenerLoading] = useState(false);
   const [screenerError, setScreenerError] = useState('');
+  const [activeStrategies, setActiveStrategies] = useState([]);
+  const [availableStrategies, setAvailableStrategies] = useState([]);
 
   const quickStocks = ['RELIANCE', 'SBIN', 'ITC', 'INFY', 'TCS', 'TATAMOTORS'];
+
+  useEffect(() => {
+    api.strategies()
+      .then((data) => {
+        const active = data?.active || [];
+        setActiveStrategies(active);
+        setAvailableStrategies(data?.available || active);
+      })
+      .catch(() => {});
+  }, []);
 
   // Trade Execution Dialog state
   const [tradeDialog, setTradeDialog] = useState(null);
@@ -133,9 +145,7 @@ export default function Signals() {
     } catch (tradeError) {
       setTradeResult({
         ok: false,
-        message: tradeError?.message?.includes('400')
-          ? 'Risk Manager blocked this order. Check capital allocation or daily loss limits.'
-          : 'Execution failed. Confirm backend trading server is active.',
+        message: tradeError?.message || 'Execution failed. Confirm backend trading server is active.',
       });
     } finally {
       setExecuting(false);
@@ -150,15 +160,41 @@ export default function Signals() {
     <section className="signals-page">
       <header className="page-heading signals-heading">
         <div>
-          <span className="eyebrow">MARKET RESEARCH & SCANNER</span>
-          <h1>Signals & Screener</h1>
-          <p className="page-subtitle">Scan individual NSE stocks or screen your entire Nifty watchlist for momentum breakouts.</p>
+          <h1>Scanner</h1>
+          <p className="page-subtitle">Single name or full watchlist · live marks when the session is open</p>
         </div>
         <div className="mode-pill">
           <span className="mode-pulse"></span>
           <span>Paper Trading Active</span>
         </div>
       </header>
+
+      <article className="card" style={{ marginBottom: '1.25rem' }}>
+        <div className="panel-heading">
+          <div>
+            <h2>Strategies</h2>
+            <p>Active algorithms used on each scan. Toggle them in Controls.</p>
+          </div>
+          <span className="strategy-count">{activeStrategies.length} active</span>
+        </div>
+        {availableStrategies.length ? (
+          <div className="strategies-grid">
+            {availableStrategies.map((strategy) => (
+              <div
+                key={strategy}
+                className={`strategy-chip ${activeStrategies.includes(strategy) ? 'active' : ''}`}
+                onClick={() => navigate('/settings')}
+                style={{ cursor: 'pointer' }}
+                title="Open Controls to turn this on or off"
+              >
+                {formatStrategy(strategy)}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="muted-copy">No strategies loaded yet.</p>
+        )}
+      </article>
 
       {/* Mode Switcher Tabs */}
       <div className="tabs" style={{ marginBottom: '1.25rem' }}>
@@ -175,7 +211,7 @@ export default function Signals() {
             if (screenerResults.length === 0) runScreener();
           }}
         >
-          🔍 Watchlist Screener
+            Watchlist Screener
         </button>
       </div>
 
@@ -232,6 +268,32 @@ export default function Signals() {
           {/* Interactive Candlestick Chart when candles exist */}
           {scanned && candles.length > 0 && (
             <article className="card" style={{ marginTop: '1.25rem', padding: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                  <strong style={{ fontSize: '1.05rem', color: 'var(--text-bright)' }}>{scannedSymbol} Live Chart</strong>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    CMP: <strong style={{ color: 'var(--accent)' }}>₹{candles[candles.length - 1]?.close?.toFixed(2) || '0.00'}</strong>
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => openTradeDialog({ symbol: scannedSymbol, action: 'BUY', price: candles[candles.length - 1]?.close || 100, strategy: 'discretionary_buy' })}
+                    style={{ padding: '0.4rem 1rem', fontSize: '0.84rem', fontWeight: 600 }}
+                  >
+                    🟢 BUY & Own {scannedSymbol}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger btn-sm"
+                    onClick={() => openTradeDialog({ symbol: scannedSymbol, action: 'SELL', price: candles[candles.length - 1]?.close || 100, strategy: 'discretionary_sell' })}
+                    style={{ padding: '0.4rem 1rem', fontSize: '0.84rem', fontWeight: 600 }}
+                  >
+                    🔴 SELL {scannedSymbol}
+                  </button>
+                </div>
+              </div>
               <CandlestickChart data={candles} symbol={scannedSymbol} height={340} />
             </article>
           )}
@@ -254,6 +316,24 @@ export default function Signals() {
                   <div className="empty-chart-icon">⚖️</div>
                   <h2>No Trade Signal (HOLD)</h2>
                   <p>Neither EMA crossover, RSI reversal, nor Supertrend triggered on {scannedSymbol}. Market is consolidating.</p>
+                  <div style={{ marginTop: '1.25rem', display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => openTradeDialog({ symbol: scannedSymbol, action: 'BUY', price: candles[candles.length - 1]?.close || 100, strategy: 'manual_entry' })}
+                      style={{ padding: '0.55rem 1.25rem' }}
+                    >
+                      🟢 Place Manual BUY Trade
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-danger"
+                      onClick={() => openTradeDialog({ symbol: scannedSymbol, action: 'SELL', price: candles[candles.length - 1]?.close || 100, strategy: 'manual_entry' })}
+                      style={{ padding: '0.55rem 1.25rem' }}
+                    >
+                      🔴 Place Manual SELL Trade
+                    </button>
+                  </div>
                 </article>
               ) : (
                 <div className="signal-results-grid">
@@ -291,15 +371,38 @@ export default function Signals() {
                             {sig.explanation}
                           </div>
                         )}
-                        {action !== 'HOLD' && (
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.65rem' }}>
                           <button
                             type="button"
                             className={`btn ${action === 'BUY' ? 'btn-primary' : 'btn-danger'} signal-trade-btn`}
                             onClick={() => openTradeDialog(sig)}
+                            style={{ flex: 1 }}
                           >
-                            Execute Paper {action}
+                            Execute Signal ({action})
                           </button>
-                        )}
+                          {action === 'SELL' && (
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              onClick={() => openTradeDialog({ symbol: scannedSymbol, action: 'BUY', price: sig.price, strategy: 'manual_buy' })}
+                              style={{ flexShrink: 0, padding: '0.45rem 0.85rem', fontSize: '0.8rem', fontWeight: 600 }}
+                              title="Buy and own shares of this stock"
+                            >
+                              🟢 BUY & Own
+                            </button>
+                          )}
+                          {action === 'BUY' && (
+                            <button
+                              type="button"
+                              className="btn btn-danger btn-sm"
+                              onClick={() => openTradeDialog({ symbol: scannedSymbol, action: 'SELL', price: sig.price, strategy: 'manual_sell' })}
+                              style={{ flexShrink: 0, padding: '0.45rem 0.85rem', fontSize: '0.8rem', fontWeight: 600 }}
+                              title="Sell / exit position in this stock"
+                            >
+                              🔴 SELL
+                            </button>
+                          )}
+                        </div>
                       </article>
                     );
                   })}

@@ -128,8 +128,8 @@ export default function CandlestickChart({ data = [], height = 320, symbol = 'RE
           </span>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', fontSize: '0.72rem' }}>
-          <span style={{ color: '#00d4ff', fontWeight: 600 }}>● EMA 9</span>
-          <span style={{ color: '#b388ff', fontWeight: 600 }}>● EMA 21</span>
+          <span style={{ color: '#c4b5fd', fontWeight: 600 }}>● EMA 9</span>
+          <span style={{ color: '#2dd4bf', fontWeight: 600 }}>● EMA 21</span>
           <span style={{ color: 'var(--text-dim)' }}>Vol: {activeCandle.volume.toLocaleString()}</span>
         </div>
       </div>
@@ -182,14 +182,14 @@ export default function CandlestickChart({ data = [], height = 320, symbol = 'RE
         })}
 
         {/* EMA Lines */}
-        <path d={ema9Path} fill="none" stroke="#00d4ff" strokeWidth="1.8" opacity="0.9" />
-        <path d={ema21Path} fill="none" stroke="#b388ff" strokeWidth="1.8" opacity="0.9" />
+        <path d={ema9Path} fill="none" stroke="#c4b5fd" strokeWidth="1.8" opacity="0.9" />
+        <path d={ema21Path} fill="none" stroke="#2dd4bf" strokeWidth="1.8" opacity="0.9" />
 
         {/* Candlesticks (Wick + Body) */}
         {chartData.map((d, i) => {
           const x = getX(i);
           const isGreen = d.close >= d.open;
-          const color = isGreen ? '#00e676' : '#ff3366';
+          const color = isGreen ? '#4ade80' : '#fb7185';
           const topY = getY(Math.max(d.open, d.close));
           const botY = getY(Math.min(d.open, d.close));
           const bodyHeight = Math.max(1.5, botY - topY);
@@ -234,7 +234,7 @@ export default function CandlestickChart({ data = [], height = 320, symbol = 'RE
               stroke="rgba(0, 212, 255, 0.5)"
               strokeDasharray="2 2"
             />
-            <circle cx={getX(hoverIndex)} cy={getY(activeCandle.close)} r="3.5" fill="#00d4ff" />
+            <circle cx={getX(hoverIndex)} cy={getY(activeCandle.close)} r="3.5" fill="#c4b5fd" />
           </g>
         )}
       </svg>

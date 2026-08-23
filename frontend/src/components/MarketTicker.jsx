@@ -2,72 +2,54 @@ import { useState, useEffect } from 'react';
 import { api } from '../api';
 
 const DEFAULT_TICKERS = [
-  { symbol: 'NIFTY 50', price: '24,852.15', change: '+0.45%', positive: true },
-  { symbol: 'BANKNIFTY', price: '51,280.40', change: '+0.32%', positive: true },
-  { symbol: 'RELIANCE', price: '₹1,316.00', change: '+0.80%', positive: true },
-  { symbol: 'SBIN', price: '₹632.50', change: '+1.15%', positive: true },
-  { symbol: 'TCS', price: '₹4,120.00', change: '-0.25%', positive: false },
-  { symbol: 'INFY', price: '₹1,885.50', change: '+0.60%', positive: true },
-  { symbol: 'TATAMOTORS', price: '₹980.20', change: '+1.40%', positive: true },
-  { symbol: 'ITC', price: '₹495.30', change: '+0.10%', positive: true },
-  { symbol: 'HDFCBANK', price: '₹1,640.80', change: '-0.15%', positive: false },
+  { symbol: 'NIFTY', price: '24,812.40', change: '+0.00%', positive: true },
+  { symbol: 'BANKNIFTY', price: '54,210.15', change: '+0.00%', positive: true },
+  { symbol: 'SBIN', price: '1,086.00', change: '+3.56%', positive: true },
+  { symbol: 'RELIANCE', price: '1,313.70', change: '-0.17%', positive: false },
+  { symbol: 'INFY', price: '1,361.00', change: 'flat', positive: true, flat: true },
+  { symbol: 'TCS', price: '2,728.00', change: 'flat', positive: true, flat: true },
 ];
 
 export default function MarketTicker() {
   const [tickers, setTickers] = useState(DEFAULT_TICKERS);
 
   useEffect(() => {
-    // Optionally fetch dynamic watchlist prices from screener
-    api.scanWatchlist()
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      api.scanWatchlist()
+        .then((data) => {
+          if (cancelled || !Array.isArray(data) || data.length === 0) return;
           const dynamic = data.slice(0, 8).map((item) => ({
             symbol: item.symbol,
-            price: `₹${Number(item.price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
-            change: item.change_pct >= 0 ? `+${item.change_pct}%` : `${item.change_pct}%`,
-            positive: item.change_pct >= 0,
+            price: Number(item.price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+            change: item.change_pct == null ? 'flat' : item.change_pct >= 0 ? `+${item.change_pct}%` : `${item.change_pct}%`,
+            positive: Number(item.change_pct || 0) >= 0,
+            flat: item.change_pct == null || Number(item.change_pct) === 0,
           }));
           setTickers([
-            { symbol: 'NIFTY 50', price: '24,852.15', change: '+0.45%', positive: true },
-            { symbol: 'BANKNIFTY', price: '51,280.40', change: '+0.32%', positive: true },
+            { symbol: 'NIFTY', price: '24,812.40', change: '+0.00%', positive: true },
+            { symbol: 'BANKNIFTY', price: '54,210.15', change: '+0.00%', positive: true },
             ...dynamic,
           ]);
-        }
-      })
-      .catch(() => {
-        // keep defaults if server is starting
-      });
+        })
+        .catch(() => {});
+    }, 8000);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, []);
+
+  const row = (prefix) => tickers.map((t, idx) => (
+    <div key={`${prefix}-${t.symbol}-${idx}`} className="ticker-item">
+      <span className="ticker-sym">{t.symbol}</span>
+      <span className="ticker-price">{t.price}</span>
+      <span className={`ticker-change ${t.flat ? '' : t.positive ? 'pos' : 'neg'}`}>{t.change}</span>
+    </div>
+  ));
 
   return (
     <div className="market-ticker-bar">
-      <div className="ticker-label">
-        <span className="ticker-pulse-dot" />
-        <span>NSE LIVE</span>
-      </div>
       <div className="ticker-track">
-        <div className="ticker-content">
-          {tickers.map((t, idx) => (
-            <div key={`${t.symbol}-${idx}`} className="ticker-item">
-              <span className="ticker-sym">{t.symbol}</span>
-              <span className="ticker-price">{t.price}</span>
-              <span className={`ticker-change ${t.positive ? 'pos' : 'neg'}`}>
-                {t.change}
-              </span>
-            </div>
-          ))}
-        </div>
-        <div className="ticker-content" aria-hidden="true">
-          {tickers.map((t, idx) => (
-            <div key={`dup-${t.symbol}-${idx}`} className="ticker-item">
-              <span className="ticker-sym">{t.symbol}</span>
-              <span className="ticker-price">{t.price}</span>
-              <span className={`ticker-change ${t.positive ? 'pos' : 'neg'}`}>
-                {t.change}
-              </span>
-            </div>
-          ))}
-        </div>
+        <div className="ticker-content">{row('a')}</div>
+        <div className="ticker-content" aria-hidden="true">{row('b')}</div>
       </div>
     </div>
   );

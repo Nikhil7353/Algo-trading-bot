@@ -1,5 +1,6 @@
 from django.test import TestCase
 
+from core.models import TradeLog
 from risk.manager import RiskManager
 
 
@@ -22,3 +23,13 @@ class RiskManagerTests(TestCase):
 
         self.assertTrue(approved, reason)
         self.assertEqual(quantity, 2)
+
+    def test_closing_a_long_writes_a_sell_trade_log(self):
+        manager = RiskManager(capital=1_000)
+        manager.open_position("INFY", "BUY", 1, 100)
+        manager.close_position("INFY", 100)
+
+        log = TradeLog.objects.get(symbol="INFY")
+        self.assertEqual(log.side, "SELL")
+        self.assertEqual(log.pnl_type, "REALIZED")
+        self.assertEqual(float(log.exit_price), 100)

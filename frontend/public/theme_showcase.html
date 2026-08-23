@@ -756,6 +756,46 @@
       border: none;
     }
 
+    .mock-page { display: none; }
+    .mock-page.active { display: block; }
+    .nav-item { cursor: pointer; }
+    .signal-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    .signal-card h3 { font-size: 0.95rem; margin: 0.55rem 0 0.2rem; }
+    .signal-card .px { font-family: 'JetBrains Mono', monospace; font-size: 1.15rem; font-weight: 700; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .field label { display: block; font-size: 0.72rem; color: var(--text-muted); margin-bottom: 0.35rem; font-weight: 600; }
+    .field input, .field select {
+      width: 100%;
+      padding: 0.55rem 0.7rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+    }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+    .chat-wrap { display: grid; grid-template-columns: 1.4fr 1fr; gap: 0.85rem; }
+    .chat-bubble { padding: 0.75rem 0.9rem; border-radius: 12px; font-size: 0.85rem; line-height: 1.45; }
+    .chat-bubble.user { background: rgba(0, 229, 255, 0.12); border: 1px solid var(--border); margin-left: 2rem; }
+    .chat-bubble.bot { background: var(--surface-card); border: 1px solid var(--border); margin-right: 2rem; }
+    .metric-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.5rem; margin: 1rem 0; }
+    .metric-grid .card { padding: 0.75rem; }
+    .metric-grid span { display: block; font-size: 0.7rem; color: var(--text-muted); }
+    .metric-grid strong { font-size: 1.05rem; }
+    .tab-row { display: flex; gap: 0.4rem; margin: 0.75rem 0 1rem; }
+    .tab-btn {
+      padding: 0.4rem 0.75rem; border-radius: 999px; border: 1px solid var(--border);
+      background: transparent; color: var(--text-muted); font-size: 0.78rem; font-weight: 600; cursor: pointer;
+    }
+    .tab-btn.on { color: var(--accent); border-color: var(--accent); background: rgba(0, 229, 255, 0.1); }
+    @media (max-width: 1000px) {
+      .signal-grid, .chat-wrap, .form-row, .metric-grid { grid-template-columns: 1fr 1fr; }
+    }
+
     /* RESPONSIVE */
     @media (max-width: 1000px) {
       .stats-6-grid { grid-template-columns: repeat(3, 1fr); }
@@ -793,11 +833,12 @@
     </div>
     
     <nav>
-      <div class="nav-item active">⊞ Dashboard</div>
-      <div class="nav-item">⚡ Signals Scanner</div>
-      <div class="nav-item">＄ Trades & Orders</div>
-      <div class="nav-item">📈 Backtest Engine</div>
-      <div class="nav-item">⚙️ Settings</div>
+      <div class="nav-item active" onclick="showPage('dashboard', this)">⊞ Dashboard</div>
+      <div class="nav-item" onclick="showPage('assistant', this)">◎ AI Assistant</div>
+      <div class="nav-item" onclick="showPage('signals', this)">⚡ Signals Scanner</div>
+      <div class="nav-item" onclick="showPage('trades', this)">＄ Trades & Orders</div>
+      <div class="nav-item" onclick="showPage('backtest', this)">📈 Backtest Engine</div>
+      <div class="nav-item" onclick="showPage('settings', this)">⚙️ Settings</div>
     </nav>
 
     <div class="sidebar-footer">
@@ -828,6 +869,8 @@
         <span class="ticker-item"><strong>SBIN</strong> ₹861.20 <span class="neg">-0.61%</span></span>
       </div>
     </div>
+
+    <section class="mock-page active" id="page-dashboard">
 
     <!-- PAGE TITLE -->
     <div class="page-title-row">
@@ -1065,10 +1108,210 @@
       </article>
     </div>
 
+    </section>
+
+    <section class="mock-page" id="page-signals">
+      <div class="page-title-row">
+        <div>
+          <span class="eyebrow-text">SCANNER · SAMPLE DATA</span>
+          <h1 class="page-title">Signals</h1>
+        </div>
+        <span style="font-size: 0.75rem; color: var(--accent); font-weight: 600;">Mock · RELIANCE scanned</span>
+      </div>
+      <article class="card">
+        <div class="panel-header">
+          <div><h2>Single-symbol scan</h2><p>Type a ticker or use a chip. This preview is static.</p></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Symbol</label><input value="RELIANCE" readonly /></div>
+          <div class="field"><label>Action</label><button class="action-btn primary" style="margin-top: 1.35rem; max-width: 160px;">Scan RELIANCE</button></div>
+        </div>
+        <div class="chip-row">
+          <div class="strat-pill active">RELIANCE</div>
+          <div class="strat-pill">SBIN</div>
+          <div class="strat-pill">ITC</div>
+          <div class="strat-pill">INFY</div>
+          <div class="strat-pill">TCS</div>
+          <div class="strat-pill">TATAMOTORS</div>
+        </div>
+      </article>
+      <div class="signal-grid">
+        <article class="card signal-card">
+          <span class="badge-side">BUY</span>
+          <h3>Supertrend (10, 3)</h3>
+          <div class="px positive">₹1,316.00</div>
+          <p style="color: var(--text-muted); font-size: 0.78rem; margin-top: 0.45rem;">Confidence 85% · trend flip under price</p>
+        </article>
+        <article class="card signal-card">
+          <span class="badge-side">BUY</span>
+          <h3>EMA Crossover 9 / 21</h3>
+          <div class="px positive">₹1,316.00</div>
+          <p style="color: var(--text-muted); font-size: 0.78rem; margin-top: 0.45rem;">Confidence 72% · RSI 58 filter ok</p>
+        </article>
+        <article class="card signal-card">
+          <span class="badge-side" style="background: rgba(255,255,255,0.08); color: var(--text-muted);">HOLD</span>
+          <h3>RSI Reversal</h3>
+          <div class="px">₹1,316.00</div>
+          <p style="color: var(--text-muted); font-size: 0.78rem; margin-top: 0.45rem;">RSI 58 — not oversold</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="mock-page" id="page-trades">
+      <div class="page-title-row">
+        <div>
+          <span class="eyebrow-text">ACTIVITY · SAMPLE DATA</span>
+          <h1 class="page-title">Trades &amp; positions</h1>
+        </div>
+      </div>
+      <div class="stats-6-grid" style="grid-template-columns: repeat(4, 1fr);">
+        <article class="card stat-box"><div class="stat-top"><span class="stat-label">Open lots</span></div><strong class="stat-number">2</strong></article>
+        <article class="card stat-box"><div class="stat-top"><span class="stat-label">Closed trades</span></div><strong class="stat-number">5</strong></article>
+        <article class="card stat-box positive"><div class="stat-top"><span class="stat-label">Win rate</span></div><strong class="stat-number positive">60%</strong></article>
+        <article class="card stat-box positive"><div class="stat-top"><span class="stat-label">Realized P&amp;L</span></div><strong class="stat-number positive">+₹557.36</strong></article>
+      </div>
+      <div class="tab-row">
+        <button class="tab-btn">Open Positions 2</button>
+        <button class="tab-btn on">Trade Log 5</button>
+        <button class="tab-btn">Orders</button>
+      </div>
+      <article class="card">
+        <div class="table-container">
+          <table class="trades-table">
+            <thead><tr><th>Symbol</th><th>Exit</th><th>Qty</th><th>Entry</th><th>Exit px</th><th>P&amp;L</th></tr></thead>
+            <tbody>
+              <tr><td>HDFCBANK</td><td><span class="badge-side">SELL</span></td><td>2</td><td>₹1,640.80</td><td>₹1,751.05</td><td class="positive">+₹220.50</td></tr>
+              <tr><td>TCS</td><td><span class="badge-side">SELL</span></td><td>1</td><td>₹2,302.00</td><td>₹2,612.20</td><td class="positive">+₹310.20</td></tr>
+              <tr><td>INFY</td><td><span class="badge-side">SELL</span></td><td>2</td><td>₹1,139.90</td><td>₹1,209.90</td><td class="positive">+₹140.00</td></tr>
+              <tr><td>SBIN</td><td><span class="badge-side">SELL</span></td><td>5</td><td>₹861.20</td><td>₹843.64</td><td class="negative">-₹87.80</td></tr>
+              <tr><td>RELIANCE</td><td><span class="badge-side">SELL</span></td><td>1</td><td>₹1,316.00</td><td>₹1,290.45</td><td class="negative">-₹25.55</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <section class="mock-page" id="page-backtest">
+      <div class="page-title-row">
+        <div>
+          <span class="eyebrow-text">SIMULATION · SAMPLE DATA</span>
+          <h1 class="page-title">Backtest</h1>
+        </div>
+        <div class="pill-status"><span class="pulse-dot"></span><span>No real orders</span></div>
+      </div>
+      <article class="card">
+        <div class="panel-header"><div><h2>Test configuration</h2><p>Sample run: RELIANCE · EMA + Supertrend · ₹25,000</p></div></div>
+        <div class="chip-row">
+          <div class="strat-pill active">Ema Crossover</div>
+          <div class="strat-pill">Rsi Reversal</div>
+          <div class="strat-pill">Bollinger Breakout</div>
+          <div class="strat-pill active">Supertrend</div>
+          <div class="strat-pill">Vwap</div>
+        </div>
+      </article>
+      <div class="metric-grid">
+        <article class="card"><span>Trades</span><strong>42</strong></article>
+        <article class="card"><span>Win / loss</span><strong>24 / 18</strong></article>
+        <article class="card"><span>Win rate</span><strong class="positive">57.1%</strong></article>
+        <article class="card"><span>Total P&amp;L</span><strong class="positive">+₹3,840</strong></article>
+        <article class="card"><span>Return</span><strong class="positive">+15.36%</strong></article>
+        <article class="card"><span>Max DD</span><strong class="negative">8.4%</strong></article>
+      </div>
+      <article class="card">
+        <div class="panel-header"><div><h2>Equity curve</h2><p>Start ₹25,000 → end ₹28,840. Step after closed trades only.</p></div><strong style="color: var(--accent);">₹28,840</strong></div>
+        <svg width="100%" height="160" viewBox="0 0 640 160" preserveAspectRatio="none">
+          <line x1="0" y1="110" x2="640" y2="110" stroke="rgba(255,255,255,0.12)" stroke-dasharray="4 4"/>
+          <path d="M0 120 L80 118 L160 108 L240 112 L320 90 L400 78 L480 70 L560 52 L640 40" fill="none" stroke="var(--accent)" stroke-width="2.5"/>
+          <path d="M0 120 L80 118 L160 108 L240 112 L320 90 L400 78 L480 70 L560 52 L640 40 L640 160 L0 160 Z" fill="rgba(0,229,255,0.12)"/>
+        </svg>
+      </article>
+    </section>
+
+    <section class="mock-page" id="page-settings">
+      <div class="page-title-row">
+        <div>
+          <span class="eyebrow-text">RISK &amp; ALERTS · SAMPLE</span>
+          <h1 class="page-title">Settings</h1>
+        </div>
+        <button class="action-btn primary" style="max-width: 140px;">Save settings</button>
+      </div>
+      <div class="grid-2col">
+        <article class="card">
+          <div class="panel-header"><div><h2>Risk</h2><p>Paper defaults for a ₹25,000 book.</p></div></div>
+          <div class="form-row">
+            <div class="field"><label>Capital (₹)</label><input value="25000" readonly /></div>
+            <div class="field"><label>Max position %</label><input value="25" readonly /></div>
+            <div class="field"><label>Stop loss %</label><input value="2" readonly /></div>
+            <div class="field"><label>Take profit %</label><input value="4" readonly /></div>
+            <div class="field"><label>Max open lots</label><input value="5" readonly /></div>
+            <div class="field"><label>Daily loss %</label><input value="5" readonly /></div>
+          </div>
+        </article>
+        <article class="card">
+          <div class="panel-header"><div><h2>Active strategies</h2><p>5 selected in this mock.</p></div></div>
+          <div class="chip-row">
+            <div class="strat-pill active">EMA Crossover</div>
+            <div class="strat-pill active">RSI Reversal</div>
+            <div class="strat-pill active">Bollinger Breakout</div>
+            <div class="strat-pill active">Supertrend</div>
+            <div class="strat-pill active">VWAP</div>
+          </div>
+          <div class="panel-header" style="margin-top: 1.25rem;"><div><h2>Watchlist</h2></div></div>
+          <div class="chip-row">
+            <div class="strat-pill">RELIANCE</div>
+            <div class="strat-pill">TCS</div>
+            <div class="strat-pill">INFY</div>
+            <div class="strat-pill">SBIN</div>
+            <div class="strat-pill">HDFCBANK</div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="mock-page" id="page-assistant">
+      <div class="page-title-row">
+        <div>
+          <span class="eyebrow-text">GROQ · SAMPLE CHAT</span>
+          <h1 class="page-title">AI Assistant</h1>
+        </div>
+      </div>
+      <div class="chat-wrap">
+        <article class="card">
+          <div class="panel-header"><div><h2>Command center</h2><p>Answers use portfolio tools. This thread is fake.</p></div></div>
+          <div class="chat-bubble user">What is my P&amp;L and cash vs holdings?</div>
+          <div class="chat-bubble bot" style="margin-top: 0.65rem;">
+            Equity is <strong>₹25,000</strong>. Available cash <strong>₹18,440.50</strong>, invested <strong>₹6,559.50</strong> in SBIN (5) and RELIANCE (1). Realized P&amp;L today is ₹0 (TCS and INFY closed flat).
+          </div>
+          <div class="chat-bubble user" style="margin-top: 0.65rem;">Why is the equity chart flat?</div>
+          <div class="chat-bubble bot" style="margin-top: 0.65rem;">
+            Equity only steps on <em>closed</em> P&amp;L. Both exits were at entry. Open lots are marked to last close, also unchanged. Buys do not move equity.
+          </div>
+        </article>
+        <article class="card">
+          <div class="panel-header"><div><h2>Watchlist sentiment</h2><p>Sample headline scores</p></div></div>
+          <div class="chip-row">
+            <div class="strat-pill active">LT · BULL +0.45</div>
+            <div class="strat-pill active">BHARTIARTL · BULL +0.62</div>
+            <div class="strat-pill">ITC · NEUT 0.00</div>
+            <div class="strat-pill active">SBIN · BULL +0.45</div>
+            <div class="strat-pill">TATAMOTORS · NEUT 0.00</div>
+          </div>
+        </article>
+      </div>
+    </section>
+
   </main>
 
   <!-- LIVE THEME SWITCHING SCRIPT -->
   <script>
+    function showPage(id, el) {
+      document.querySelectorAll('.mock-page').forEach((page) => page.classList.remove('active'));
+      const target = document.getElementById('page-' + id);
+      if (target) target.classList.add('active');
+      document.querySelectorAll('.nav-item').forEach((item) => item.classList.remove('active'));
+      if (el) el.classList.add('active');
+    }
+
     function applyTheme(themeName) {
       document.body.className = '';
       document.querySelectorAll('.theme-pill-btn').forEach(btn => btn.classList.remove('active'));

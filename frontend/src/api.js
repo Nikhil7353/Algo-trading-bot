@@ -8,7 +8,16 @@ async function request(path, options = {}) {
     ...options,
     headers: { 'Content-Type': 'application/json', ...options.headers },
   });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    let errorMsg = `${res.status} ${res.statusText}`;
+    try {
+      const errData = await res.json();
+      if (errData?.error) errorMsg = errData.error;
+    } catch {}
+    const err = new Error(errorMsg);
+    err.status = res.status;
+    throw err;
+  }
   return res.json();
 }
 
