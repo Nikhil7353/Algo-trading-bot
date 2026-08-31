@@ -55,12 +55,15 @@ class AutoTrader:
         self.logs.insert(0, entry)
         if len(self.logs) > self.max_logs:
             self.logs.pop()
+        
+        # Safe ASCII string for Windows console logging (prevents charmap UnicodeEncodeError)
+        console_msg = message.encode("ascii", "replace").decode("ascii")
         if level == "error":
-            logger.error(message)
+            logger.error(console_msg)
         elif level == "warning":
-            logger.warning(message)
+            logger.warning(console_msg)
         else:
-            logger.info(message)
+            logger.info(console_msg)
 
     def start(self, interval_seconds: Optional[int] = None):
         with self._lock:
@@ -278,12 +281,11 @@ class AutoTrader:
             send_trade_executed_alert(
                 symbol=signal.symbol,
                 side="BUY",
-                quantity=quantity,
+                qty=quantity,
                 price=float(entry_price),
-                strategy=signal.strategy,
-                mode="Paper (AutoBot)",
                 stop_loss=float(stop_loss),
                 take_profit=float(take_profit),
+                mode="Paper (AutoBot)",
             )
             send_whatsapp_trade_alert(
                 symbol=signal.symbol,
@@ -326,9 +328,6 @@ class AutoTrader:
         try:
             send_position_closed_alert(
                 symbol=pos.symbol,
-                quantity=pos.quantity,
-                entry_price=float(pos.entry_price),
-                exit_price=float(exit_price),
                 pnl=float(pnl),
                 pnl_pct=pnl_pct,
                 reason=reason,

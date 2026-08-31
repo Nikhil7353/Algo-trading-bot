@@ -20,12 +20,7 @@ risk:
   cooldown_after_loss_sec: 300
   trailing_stop_loss_pct: 1
 strategies:
-  active:
-  - ema_crossover
-  - rsi_reversal
-  - bollinger_breakout
-  - supertrend
-  - vwap
+  active: []
   available:
   - ema_crossover
   - rsi_reversal

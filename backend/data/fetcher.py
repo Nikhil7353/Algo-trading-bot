@@ -1,10 +1,11 @@
 import json
 import os
+import threading
 import time
 import urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, Dict, Tuple
+from typing import Optional, Dict, Tuple, Any
 
 import numpy as np
 import pandas as pd
@@ -52,46 +53,57 @@ class InstrumentTokenMaster:
     Enables dynamic resolution of any NSE or BSE ticker symbol to its numeric instrument token.
     """
     _instance = None
+    _lock = threading.Lock()
 
     def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialized = False
-        return cls._instance
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+                cls._instance._initialized = False
+            return cls._instance
 
     def __init__(self, cache_dir: Optional[Path] = None):
-        if self._initialized:
+        if getattr(self, "_initialized", False):
             return
         self._initialized = True
         self.cache_path = (cache_dir or (BASE_DIR / "data")) / "OpenAPIScripMaster.json"
         self._symbol_exchange_map: Dict[Tuple[str, str], str] = {}
         self._symbol_map: Dict[str, str] = dict(DEFAULT_NSE_TOKENS)
+        self._is_loading = False
         self.load_instruments()
 
     def load_instruments(self, force_download: bool = False):
-        """Load instrument tokens from local cache or download fresh if expired/missing."""
-        needs_download = force_download or not self.cache_path.exists()
-        if not needs_download and self.cache_path.exists():
+        """Load instrument tokens from local cache or trigger background download if missing."""
+        if self.cache_path.exists():
             try:
                 file_age = time.time() - os.path.getmtime(self.cache_path)
-                if file_age > (CACHE_EXPIRY_HOURS * 3600):
-                    needs_download = True
+                if file_age <= (CACHE_EXPIRY_HOURS * 3600):
+                    self._parse_cache_file()
+                    return
             except OSError:
-                needs_download = True
+                pass
 
-        if needs_download:
-            self._download_scrip_master()
-
+        # If cache exists (even if old), parse it first so we don't block
         if self.cache_path.exists():
             self._parse_cache_file()
-        else:
-            trade_log.logger.warning("Using fallback static NSE instrument token map")
-            self._symbol_map.update(DEFAULT_NSE_TOKENS)
+
+        # Download fresh copy in a background thread to avoid blocking HTTP requests
+        if not self._is_loading:
+            threading.Thread(target=self._download_and_refresh, daemon=True).start()
+
+    def _download_and_refresh(self):
+        self._is_loading = True
+        try:
+            self._download_scrip_master()
+            if self.cache_path.exists():
+                self._parse_cache_file()
+        finally:
+            self._is_loading = False
 
     def _download_scrip_master(self):
         """Download fresh OpenAPIScripMaster.json from Angel One."""
         try:
-            trade_log.logger.info("Downloading latest Angel One Scrip Master JSON...")
+            trade_log.logger.info("Downloading latest Angel One Scrip Master JSON in background...")
             self.cache_path.parent.mkdir(parents=True, exist_ok=True)
             req = urllib.request.Request(
                 SCRIP_MASTER_URL,
@@ -112,6 +124,9 @@ class InstrumentTokenMaster:
                 data = json.load(f)
 
             count = 0
+            new_sym_ex = {}
+            new_sym = dict(DEFAULT_NSE_TOKENS)
+
             for item in data:
                 token = str(item.get("token", "")).strip()
                 name = str(item.get("name", "")).upper().strip()
@@ -125,23 +140,25 @@ class InstrumentTokenMaster:
 
                 # Map exact (symbol, exchange) and (name, exchange)
                 if clean_sym and exch:
-                    self._symbol_exchange_map[(clean_sym, exch)] = token
+                    new_sym_ex[(clean_sym, exch)] = token
                 if name and exch:
-                    self._symbol_exchange_map[(name, exch)] = token
+                    new_sym_ex[(name, exch)] = token
 
                 # Default fallback map (prefer NSE equity over BSE)
                 if exch == "NSE" and (raw_symbol.endswith("-EQ") or item.get("instrumenttype") == ""):
                     if clean_sym:
-                        self._symbol_map[clean_sym] = token
+                        new_sym[clean_sym] = token
                     if name:
-                        self._symbol_map[name] = token
-                elif clean_sym not in self._symbol_map:
-                    self._symbol_map[clean_sym] = token
+                        new_sym[name] = token
+                elif clean_sym not in new_sym:
+                    new_sym[clean_sym] = token
                     if name:
-                        self._symbol_map[name] = token
+                        new_sym[name] = token
 
                 count += 1
 
+            self._symbol_exchange_map = new_sym_ex
+            self._symbol_map = new_sym
             trade_log.logger.info("Indexed %d instruments in Angel Token Master", count)
         except Exception as e:
             trade_log.log_error("Parse Scrip Master", e)
@@ -167,90 +184,243 @@ class InstrumentTokenMaster:
 
 
 class DataFetcher:
+    _instance: Optional["DataFetcher"] = None
+    _lock = threading.Lock()
+
+    # In-memory TTL caches
+    _live_price_cache: Dict[str, Tuple[float, float]] = {}  # symbol -> (price, timestamp)
+    _hist_cache: Dict[str, Tuple[pd.DataFrame, float]] = {}  # key -> (df, timestamp)
+    LIVE_CACHE_TTL = 15.0  # 15 seconds
+    HIST_CACHE_TTL = 60.0  # 60 seconds
+
+    def __new__(cls, *args, **kwargs):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+                cls._instance._initialized = False
+            return cls._instance
+
     def __init__(self):
+        if getattr(self, "_initialized", False):
+            return
+        self._initialized = True
         self.settings = get_settings()
         self._client = None
         self._feed_token = None
+        self._angel_connect_attempted = False
         self.token_master = InstrumentTokenMaster()
 
-        if self.settings.mode == "live":
-            self._connect_angel()
+        # Connect to Angel One if credentials are present (regardless of paper or live mode)
+        self._ensure_angel_connection()
 
     def get_token(self, symbol: str, exchange: str = "NSE") -> str:
         """Resolve an NSE/BSE trading symbol to its Angel One instrument token."""
         return self.token_master.resolve_token(symbol, exchange)
 
-    def _connect_angel(self):
+    def _ensure_angel_connection(self):
+        """Connects to Angel One SmartAPI if credentials are present."""
+        if self._client is not None or self._angel_connect_attempted:
+            return
+
+        self._angel_connect_attempted = True
+        if not self.settings.angel_api_key or not self.settings.angel_client_id:
+            trade_log.logger.info("Angel One credentials not configured. Using Yahoo Finance/Synthetic data.")
+            return
+
         try:
             from SmartApi import SmartConnect
             import pyotp
 
-            if not self.settings.angel_api_key:
-                trade_log.logger.warning("Angel One API key not configured")
-                return
-
-            self._client = SmartConnect(self.settings.angel_api_key)
-            totp = pyotp.TOTP(self.settings.angel_totp_secret).now()
-            data = self._client.generateSession(
+            client = SmartConnect(self.settings.angel_api_key)
+            totp = pyotp.TOTP(self.settings.angel_totp_secret).now() if self.settings.angel_totp_secret else ""
+            data = client.generateSession(
                 self.settings.angel_client_id,
                 self.settings.angel_password,
                 totp,
             )
-            if data.get("status"):
+            if data and data.get("status"):
+                self._client = client
                 self._feed_token = self._client.getfeedToken()
-                trade_log.logger.info("Connected to Angel One SmartAPI")
+                trade_log.logger.info("Connected to Angel One SmartAPI (Market Data Active)")
             else:
-                trade_log.log_error("Angel Auth", Exception(data.get("message", "Failed")))
+                trade_log.log_error("Angel Auth", Exception(data.get("message", "Failed to login")))
         except ImportError:
-            trade_log.log_error("Angel", ImportError("pip install smartapi-python pyotp websocket-client"))
+            trade_log.logger.warning("smartapi-python or pyotp not installed. Using fallback.")
         except Exception as e:
             trade_log.log_error("Angel Connection", e)
 
-    def fetch_historical(self, symbol: str, exchange: str = "NSE", interval: str = "day", days: int = 504) -> pd.DataFrame:
-        clean_symbol = symbol.upper().replace(".NS", "").replace(".BO", "").strip()
+    def fetch_live_price(
+        self,
+        symbol: str,
+        exchange: str = "NSE",
+        allow_slow_fallback: bool = True,
+    ) -> Optional[float]:
+        clean_symbol = symbol.upper().replace(".NS", "").replace(".BO", "").replace("-EQ", "").strip()
 
-        # If live mode and client is connected, try Angel One first
-        if self.settings.mode == "live" and self._client is not None:
+        # 1. Check in-memory cache first
+        now = time.time()
+        with self._lock:
+            if clean_symbol in self._live_price_cache:
+                cached_price, cached_at = self._live_price_cache[clean_symbol]
+                if (now - cached_at) < self.LIVE_CACHE_TTL and cached_price > 0:
+                    return cached_price
+
+        # 2. Try Angel One LTP (Fastest: ~50ms)
+        self._ensure_angel_connection()
+        if self._client is not None:
+            try:
+                token = self.get_token(clean_symbol, exchange)
+                data = self._client.ltpData(exchange, clean_symbol, token)
+                if data and data.get("data") and "ltp" in data["data"]:
+                    ltp = float(data["data"]["ltp"])
+                    if ltp > 0:
+                        with self._lock:
+                            self._live_price_cache[clean_symbol] = (ltp, now)
+                        return ltp
+            except Exception as e:
+                trade_log.logger.debug("Angel LTP failed for %s: %s", clean_symbol, e)
+
+        # 3. Try yfinance fast_info
+        if allow_slow_fallback:
+            try:
+                import yfinance as yf
+                ticker_symbol = f"{clean_symbol}.NS"
+                ticker = yf.Ticker(ticker_symbol)
+                fast_info = getattr(ticker, "fast_info", None)
+                if fast_info and "lastPrice" in fast_info and fast_info["lastPrice"] is not None:
+                    ltp = float(fast_info["lastPrice"])
+                    if ltp > 0:
+                        with self._lock:
+                            self._live_price_cache[clean_symbol] = (ltp, now)
+                        return ltp
+            except Exception:
+                pass
+
+            # 4. Fallback to historical candle close
+            df = self.fetch_historical(clean_symbol, days=5)
+            if not df.empty and "close" in df.columns:
+                ltp = float(df["close"].iloc[-1])
+                with self._lock:
+                    self._live_price_cache[clean_symbol] = (ltp, now)
+                return ltp
+
+        return None
+
+    def fetch_historical(
+        self,
+        symbol: str,
+        exchange: str = "NSE",
+        interval: str = "day",
+        days: int = 504,
+    ) -> pd.DataFrame:
+        clean_symbol = symbol.upper().replace(".NS", "").replace(".BO", "").replace("-EQ", "").strip()
+        cache_key = f"{clean_symbol}_{exchange}_{interval}_{days}"
+
+        # 1. Check in-memory cache first
+        now = time.time()
+        with self._lock:
+            if cache_key in self._hist_cache:
+                cached_df, cached_at = self._hist_cache[cache_key]
+                if (now - cached_at) < self.HIST_CACHE_TTL and not cached_df.empty:
+                    return cached_df.copy()
+
+        # 2. Try Angel One SmartAPI candles first if connected
+        self._ensure_angel_connection()
+        if self._client is not None:
             df = self._fetch_angel(clean_symbol, exchange, interval, days)
             if not df.empty:
-                return df
+                with self._lock:
+                    self._hist_cache[cache_key] = (df, now)
+                return df.copy()
 
-        # Default / Paper / Backtesting: fetch real historical data via yfinance
+        # 3. Fallback to yfinance
         df = self._fetch_yfinance(clean_symbol, days=days, interval=interval)
         if not df.empty:
-            return df
+            with self._lock:
+                self._hist_cache[cache_key] = (df, now)
+            return df.copy()
 
-        # Fallback to simulated data if network/yfinance is completely unavailable
+        # 4. Fallback to simulated data if network/yfinance is unavailable
         trade_log.logger.warning("Using synthetic data fallback for %s", clean_symbol)
-        return self._generate_sample(clean_symbol, days)
+        sample_df = self._generate_sample(clean_symbol, days)
+        with self._lock:
+            self._hist_cache[cache_key] = (sample_df, now)
+        return sample_df.copy()
+
+    _angel_api_lock = threading.Lock()
+    _last_angel_call_at = 0.0
+
+    def _fetch_angel(self, symbol: str, exchange: str, interval: str, days: int) -> pd.DataFrame:
+        try:
+            token = self.get_token(symbol, exchange)
+            interval_map = {
+                "day": "ONE_DAY",
+                "1d": "ONE_DAY",
+                "1h": "ONE_HOUR",
+                "15m": "FIFTEEN_MINUTE",
+                "5m": "FIVE_MINUTE",
+                "1m": "ONE_MINUTE",
+            }
+            params = {
+                "exchange": exchange,
+                "symboltoken": token,
+                "interval": interval_map.get(interval, "ONE_DAY"),
+                "fromdate": (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d 09:15"),
+                "todate": datetime.now().strftime("%Y-%m-%d 15:30"),
+            }
+
+            # Pace Angel One candle requests across threads to respect broker rate limits
+            for attempt in range(2):
+                with self._angel_api_lock:
+                    now = time.time()
+                    elapsed = now - DataFetcher._last_angel_call_at
+                    if elapsed < 0.12:
+                        time.sleep(0.12 - elapsed)
+                    DataFetcher._last_angel_call_at = time.time()
+                    data = self._client.getCandleData(params)
+
+                if data and data.get("data"):
+                    df = pd.DataFrame(
+                        data["data"],
+                        columns=["date", "open", "high", "low", "close", "volume"],
+                    )
+                    df = df.dropna(subset=["open", "high", "low", "close"])
+                    df["date"] = pd.to_datetime(df["date"])
+                    df["symbol"] = symbol
+                    for col in ["open", "high", "low", "close"]:
+                        df[col] = df[col].astype(float)
+                    df["volume"] = df["volume"].fillna(0).astype(int)
+                    return df
+                elif attempt == 0:
+                    time.sleep(0.2)
+        except Exception as e:
+            trade_log.logger.debug("Angel Historical failed for %s: %s", symbol, e)
+        return pd.DataFrame()
 
     def _fetch_yfinance(self, symbol: str, days: int = 504, interval: str = "day") -> pd.DataFrame:
         try:
             import yfinance as yf
 
-            # Map interval to yfinance format
             yf_interval_map = {
                 "day": "1d",
                 "1d": "1d",
                 "1h": "1h",
-                "5m": "5m",
                 "15m": "15m",
+                "5m": "5m",
                 "1m": "1m",
             }
             yf_interval = yf_interval_map.get(interval, "1d")
             ticker_symbol = f"{symbol}.NS" if not symbol.endswith((".NS", ".BO")) else symbol
 
-            # For intraday (1m, 5m), yfinance max period is 60d
             period = f"{days}d" if yf_interval == "1d" else "60d"
 
             ticker = yf.Ticker(ticker_symbol)
-            df = ticker.history(period=period, interval=yf_interval)
+            df = ticker.history(period=period, interval=yf_interval, timeout=6)
 
             if df is None or df.empty:
                 return pd.DataFrame()
 
             df = df.reset_index()
-            # Standardize date column
             date_col = "Date" if "Date" in df.columns else "Datetime" if "Datetime" in df.columns else df.columns[0]
             df = df.rename(columns={
                 date_col: "date",
@@ -261,7 +431,6 @@ class DataFetcher:
                 "Volume": "volume",
             })
 
-            # Ensure proper types and clean any incomplete / NaN rows
             df = df.dropna(subset=["open", "high", "low", "close"])
             df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
             df["symbol"] = symbol
@@ -274,84 +443,6 @@ class DataFetcher:
             trade_log.logger.debug("yfinance fetch failed for %s: %s", symbol, e)
             return pd.DataFrame()
 
-    def _fetch_angel(self, symbol: str, exchange: str, interval: str, days: int) -> pd.DataFrame:
-        try:
-            token = self.get_token(symbol, exchange)
-            interval_map = {
-                "day": "ONE_DAY",
-                "1d": "ONE_DAY",
-                "1h": "ONE_HOUR",
-                "5m": "FIVE_MINUTE",
-                "1m": "ONE_MINUTE",
-            }
-            params = {
-                "exchange": exchange,
-                "symboltoken": token,
-                "interval": interval_map.get(interval, "ONE_DAY"),
-                "fromdate": (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d 09:15"),
-                "todate": datetime.now().strftime("%Y-%m-%d 15:30"),
-            }
-            data = self._client.getCandleData(params)
-            if data and data.get("data"):
-                df = pd.DataFrame(
-                    data["data"],
-                    columns=["date", "open", "high", "low", "close", "volume"],
-                )
-                df = df.dropna(subset=["open", "high", "low", "close"])
-                df["date"] = pd.to_datetime(df["date"])
-                df["symbol"] = symbol
-                for col in ["open", "high", "low", "close"]:
-                    df[col] = df[col].astype(float)
-                df["volume"] = df["volume"].fillna(0).astype(int)
-                return df
-        except Exception as e:
-            trade_log.log_error(f"Angel Historical for {symbol}", e)
-        return pd.DataFrame()
-
-    def fetch_live_price(
-        self,
-        symbol: str,
-        exchange: str = "NSE",
-        allow_slow_fallback: bool = True,
-    ) -> Optional[float]:
-        clean_symbol = symbol.upper().replace(".NS", "").replace(".BO", "").strip()
-
-        # If live mode and connected, use Angel One LTP
-        if self.settings.mode == "live" and self._client is not None:
-            try:
-                token = self.get_token(clean_symbol, exchange)
-                data = self._client.ltpData(exchange, clean_symbol, token)
-                if data and data.get("data"):
-                    return float(data["data"]["ltp"])
-            except Exception as e:
-                trade_log.log_error(f"Live Price Angel for {clean_symbol}", e)
-
-        # In paper mode, try yfinance latest price
-        try:
-            import yfinance as yf
-            ticker_symbol = f"{clean_symbol}.NS"
-            ticker = yf.Ticker(ticker_symbol)
-            fast_info = getattr(ticker, "fast_info", None)
-            if fast_info and "lastPrice" in fast_info and fast_info["lastPrice"] is not None:
-                return float(fast_info["lastPrice"])
-
-            if allow_slow_fallback:
-                hist = ticker.history(period="1d", interval="1m")
-                if not hist.empty:
-                    return float(hist["Close"].iloc[-1])
-        except Exception:
-            pass
-
-        if not allow_slow_fallback:
-            return None
-
-        # Fallback to last available historical price
-        df = self.fetch_historical(clean_symbol, days=5)
-        if not df.empty:
-            return float(df["close"].iloc[-1])
-
-        return None
-
     def _generate_sample(self, symbol: str, days: int = 504) -> pd.DataFrame:
         seed = sum(ord(c) for c in symbol)
         rng = np.random.RandomState(seed)
@@ -360,7 +451,7 @@ class DataFetcher:
         base_prices = {
             "RELIANCE": 2850, "TCS": 3900, "INFY": 1520, "HDFCBANK": 1650,
             "ICICIBANK": 1280, "SBIN": 630, "BHARTIARTL": 1520, "ITC": 460,
-            "KOTAKBANK": 1780, "LT": 3450,
+            "KOTAKBANK": 1780, "LT": 3450, "TATAMOTORS": 980,
         }
         base = base_prices.get(symbol, 1000)
         returns = rng.normal(0.0004, 0.016, len(dates))
@@ -376,3 +467,4 @@ class DataFetcher:
             "symbol": symbol,
         })
         return df
+

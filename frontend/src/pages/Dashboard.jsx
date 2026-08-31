@@ -256,13 +256,41 @@ export default function Dashboard() {
       <header className="page-heading dashboard-header">
         <div>
           <h1>Overview</h1>
-          <p className="page-subtitle">{istStamp} · {isWeekendInKolkata() ? 'last-close marks' : 'session marks'} · IST</p>
+          <p className="page-subtitle">{istStamp} · {isWeekendInKolkata() ? 'last-close marks' : 'live session marks'} · IST</p>
         </div>
         <div className="header-chips">
-          <span className="chip">Paper</span>
-          <span className="chip">AutoBot {bot.is_running ? 'on' : 'off'}</span>
-          <span className={`chip ${unrealizedPnl >= 0 ? 'up' : ''}`}>
-            Unreal {unrealizedPnl >= 0 ? '+' : ''}{formatCurrency(unrealizedPnl)}
+          <button
+            type="button"
+            className="chip refresh-chip"
+            onClick={() => fetchData({ silent: false })}
+            disabled={refreshing}
+            title="Refresh live portfolio and prices"
+          >
+            <svg
+              className={`refresh-icon ${refreshing ? 'spinning' : ''}`}
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+            <span>{refreshing ? 'Syncing…' : 'Refresh'}</span>
+          </button>
+          <span className="chip mode-chip">
+            <i className="mode-pulse" /> Paper Trading
+          </span>
+          <span className={`chip ${bot.is_running ? 'bot-active' : ''}`}>
+            AutoBot: {bot.is_running ? 'RUNNING' : 'OFF'}
+          </span>
+          <span className={`chip ${unrealizedPnl > 0 ? 'up' : unrealizedPnl < 0 ? 'down' : ''}`}>
+            Unreal: {unrealizedPnl >= 0 ? '+' : ''}{formatCurrency(unrealizedPnl)}
           </span>
         </div>
       </header>
@@ -271,41 +299,53 @@ export default function Dashboard() {
       {squareOffMessage && <div className="dashboard-alert success-alert" role="status" style={{ background: '#0a3820', borderColor: '#00e676', color: '#b9f6ca', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px' }}>{squareOffMessage}</div>}
 
       <div className="stats-grid dashboard-stats-grid">
-        <StatCard label="Equity" value={formatCurrency(currentCapital)} detail="cash + mark" />
-        <StatCard label="Cash" value={formatCurrency(availableCash)} detail={`${cashPct.toFixed(1)}% idle`} />
+        <StatCard label="Total Equity" value={formatCurrency(currentCapital)} detail="Cash + Holdings" tone="default" />
+        <StatCard label="Available Cash" value={formatCurrency(availableCash)} detail={`${cashPct.toFixed(1)}% Free Margin`} tone="default" />
         <StatCard
-          label="Invested"
+          label="Invested Capital"
           value={formatCurrency(investedCapital)}
-          detail={positions.map((p) => p.symbol).slice(0, 2).join(' · ') || 'flat'}
+          detail={positions.map((p) => p.symbol).slice(0, 2).join(' · ') || 'Flat (0 Lots)'}
+          tone="default"
         />
         <StatCard
-          label="Unrealized"
+          label="Unrealized P&L"
           value={`${unrealizedPnl >= 0 ? '+' : ''}${formatCurrency(unrealizedPnl)}`}
           tone={unrealizedPnl > 0 ? 'positive' : unrealizedPnl < 0 ? 'negative' : 'default'}
-          detail={isWeekendInKolkata() ? 'weekend close' : 'vs last price'}
+          detail={isWeekendInKolkata() ? 'Weekend Close' : 'Live Mark-to-Market'}
         />
         <StatCard
-          label="Realized"
+          label="Realized P&L"
           value={formatCurrency(realizedPnl)}
           tone={realizedPnl > 0 ? 'positive' : realizedPnl < 0 ? 'negative' : 'default'}
-          detail="exits at fill"
+          detail={`${trades.length} Closed Trades`}
         />
-        <StatCard label="Open" value={positions.length} detail={`${positions.length} lot${positions.length === 1 ? '' : 's'}`} />
+        <StatCard
+          label="Active Lots"
+          value={`${positions.length} / ${riskCfg.max_open_positions || 5}`}
+          detail={`${positions.length === 0 ? 'No Open Risk' : 'In Market'}`}
+          tone={positions.length > 0 ? 'positive' : 'default'}
+        />
       </div>
 
       <div className="dashboard-grid">
         <article className="card dashboard-panel equity-panel">
           <div className="panel-heading">
             <div>
-              <h2>Mark path</h2>
-              <p>Step after each close · cash {formatCurrency(availableCash)} + holdings {formatCurrency(investedCapital)}</p>
+              <h2>Mark Path (Equity Curve)</h2>
+              <p>Step after each closed trade · Cash {formatCurrency(availableCash)} + Holdings {formatCurrency(investedCapital)}</p>
+            </div>
+            <div className="equity-quick-stat">
+              <span className="stat-tag">Net Return:</span>
+              <strong className={`mono ${realizedPnl >= 0 ? 'positive' : 'negative'}`}>
+                {realizedPnl >= 0 ? '+' : ''}{formatCurrency(realizedPnl)}
+              </strong>
             </div>
           </div>
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={equityCurve} margin={{ top: 10, right: 8, bottom: 0, left: 4 }}>
               <defs>
                 <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#c4b5fd" stopOpacity={0.42} />
+                  <stop offset="5%" stopColor="#c4b5fd" stopOpacity={0.35} />
                   <stop offset="95%" stopColor="#c4b5fd" stopOpacity={0.0} />
                 </linearGradient>
               </defs>
@@ -317,7 +357,7 @@ export default function Dashboard() {
                 tickFormatter={(value) => `₹${Math.round(value).toLocaleString('en-IN')}`}
               />
               <Tooltip content={<EquityTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.16)', strokeWidth: 1 }} />
-              {initialCapital > 0 && <ReferenceLine y={initialCapital} stroke="#b3a6d4" strokeDasharray="4 4" />}
+              {initialCapital > 0 && <ReferenceLine y={initialCapital} stroke="#8b7db0" strokeDasharray="4 4" />}
               <Area
                 type="stepAfter"
                 dataKey="equity"
@@ -335,16 +375,16 @@ export default function Dashboard() {
         <article className="card dashboard-panel trades-panel">
           <div className="panel-heading">
             <div>
-              <h2>Book mix</h2>
-              <p>Cash vs open lots at entry</p>
+              <h2>Book Mix</h2>
+              <p>Asset allocation vs open lots</p>
             </div>
           </div>
           {mixData.length > 0 ? (
             <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <ResponsiveContainer width="52%" height={160}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '8px 0' }}>
+                <ResponsiveContainer width="48%" height={150}>
                   <PieChart>
-                    <Pie data={mixData} dataKey="value" innerRadius={42} outerRadius={62} paddingAngle={3} stroke="none">
+                    <Pie data={mixData} dataKey="value" innerRadius={42} outerRadius={60} paddingAngle={4} stroke="none">
                       {mixData.map((row, idx) => (
                         <Cell key={row.name} fill={MIX_COLORS[idx % MIX_COLORS.length]} />
                       ))}
@@ -354,30 +394,23 @@ export default function Dashboard() {
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'grid', gap: 8 }}>
                   {mixData.map((row, idx) => (
                     <div key={row.name} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <span style={{ width: 8, height: 8, borderRadius: 2, background: MIX_COLORS[idx % MIX_COLORS.length] }} />
-                      {row.name} {currentCapital > 0 ? `${((row.value / currentCapital) * 100).toFixed(1)}%` : ''}
+                      <span style={{ width: 10, height: 10, borderRadius: 3, background: MIX_COLORS[idx % MIX_COLORS.length] }} />
+                      <span style={{ color: '#f7f4ff', fontWeight: 600 }}>{row.name}:</span>
+                      <span>{currentCapital > 0 ? `${((row.value / currentCapital) * 100).toFixed(1)}%` : ''}</span>
                     </div>
                   ))}
                 </div>
               </div>
-              {positions.length > 0 && (
-                <table className="table compact" style={{ marginTop: 8 }}>
-                  <tbody>
-                    {positions.map((pos) => {
-                      const pnl = Number(pos.unrealized_pnl || 0);
-                      return (
-                        <tr key={pos.id || pos.symbol}>
-                          <td className="mono" style={{ fontWeight: 650 }}>{pos.symbol}</td>
-                          <td>{pos.quantity} × {Number(pos.entry_price || 0).toLocaleString('en-IN')}</td>
-                          <td className={`mono pnl-value ${pnl > 0 ? 'positive' : pnl < 0 ? 'negative' : ''}`}>
-                            {pnl >= 0 ? '+' : ''}{formatCurrency(pnl)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
+              <div className="book-mix-summary-bar">
+                <div className="summary-item">
+                  <span className="label">Free Cash</span>
+                  <strong className="mono">{formatCurrency(availableCash)}</strong>
+                </div>
+                <div className="summary-item">
+                  <span className="label">Margin Deployed</span>
+                  <strong className="mono">{formatCurrency(investedCapital)}</strong>
+                </div>
+              </div>
             </>
           ) : (
             <p className="muted-copy">No book mix yet.</p>
@@ -386,11 +419,11 @@ export default function Dashboard() {
       </div>
 
       {positions.length > 0 && (
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 14 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <span className="muted-copy">{priceColumnLabel} · SL/TP rails</span>
+            <span className="muted-copy" style={{ fontWeight: 650, color: '#f7f4ff' }}>Active Positions · SL / TP Range Tracking</span>
             <button type="button" className="btn btn-danger btn-sm" onClick={handleSquareOffAll} disabled={squaringOff}>
-              {squaringOff ? 'Closing…' : 'Square off all'}
+              {squaringOff ? 'Closing…' : 'Square Off All'}
             </button>
           </div>
           <div className="pos-lots">
@@ -433,34 +466,71 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="dashboard-lower-grid" style={{ marginTop: 12 }}>
+      <div className="dashboard-lower-grid" style={{ marginTop: 14 }}>
         <article className="card dashboard-panel">
           <div className="panel-heading">
-            <div><h2>Tape</h2><p>Last AutoBot cycle</p></div>
+            <div>
+              <h2>AutoBot Decision Stream</h2>
+              <p>Real-time strategy telemetry and scanning events</p>
+            </div>
+            <span className={`badge ${bot.is_running ? 'badge-success' : 'badge-idle'}`} style={{ fontSize: '0.7rem' }}>
+              {bot.is_running ? 'POLLING LIVE' : 'DAEMON IDLE'}
+            </span>
           </div>
           <div className="tape-feed">
-            {botLogs.length > 0 ? botLogs.map((log, idx) => (
-              <div className="ev" key={idx}>
-                <time>{String(log.timestamp || '').split(' ').pop() || '—'}</time>
-                <div>{log.message}</div>
+            {botLogs.length > 0 ? (
+              botLogs.map((log, idx) => (
+                <div className={`ev ${log.level || 'info'}`} key={idx}>
+                  <time>{String(log.timestamp || '').split(' ').pop() || '—'}</time>
+                  <div className="ev-msg">{log.message}</div>
+                </div>
+              ))
+            ) : (
+              <div className="tape-idle-box">
+                <div className="idle-title">🤖 Auto-Trader Engine Ready</div>
+                <p>Configured with 5 active breakout strategies across 6 watchlist stocks. Click <strong>AutoBot Toggle</strong> in the sidebar to start continuous automated execution.</p>
               </div>
-            )) : (
-              <p className="muted-copy">No bot tape yet. AutoBot is {bot.is_running ? 'running' : 'off'}.</p>
             )}
           </div>
         </article>
+
         <article className="card dashboard-panel">
           <div className="panel-heading">
-            <div><h2>Risk envelope</h2><p>From Controls</p></div>
+            <div>
+              <h2>Risk Envelope & Guardrails</h2>
+              <p>Enforced by Risk Management Engine</p>
+            </div>
+            <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>SHIELD ACTIVE</span>
           </div>
-          <table className="table compact">
-            <tbody>
-              <tr><td>Daily halt</td><td style={{ textAlign: 'right' }}>{riskCfg.max_daily_loss_pct ?? 5}%</td></tr>
-              <tr><td>Max position</td><td style={{ textAlign: 'right' }}>{riskCfg.max_position_pct ?? 25}%</td></tr>
-              <tr><td>Open / max</td><td style={{ textAlign: 'right' }}>{positions.length} / {riskCfg.max_open_positions ?? 5}</td></tr>
-              <tr><td>SL / TP</td><td style={{ textAlign: 'right' }}>{riskCfg.stop_loss_pct ?? 3}% / {riskCfg.take_profit_pct ?? 6}%</td></tr>
-            </tbody>
-          </table>
+          <div className="risk-guardrails-grid">
+            <div className="guardrail-row">
+              <div className="guardrail-info">
+                <span>Max Daily Drawdown Halt</span>
+                <strong>{riskCfg.max_daily_loss_pct ?? 2}% Max</strong>
+              </div>
+              <div className="guardrail-meter"><i style={{ width: '0%', background: '#4ade80' }} /></div>
+            </div>
+            <div className="guardrail-row">
+              <div className="guardrail-info">
+                <span>Max Single Position Allocation</span>
+                <strong>{riskCfg.max_position_pct ?? 25}% of Capital</strong>
+              </div>
+              <div className="guardrail-meter"><i style={{ width: '0%', background: '#2dd4bf' }} /></div>
+            </div>
+            <div className="guardrail-row">
+              <div className="guardrail-info">
+                <span>Concurrent Position Capacity</span>
+                <strong>{positions.length} / {riskCfg.max_open_positions ?? 5} Slots</strong>
+              </div>
+              <div className="guardrail-meter"><i style={{ width: `${(positions.length / (riskCfg.max_open_positions || 5)) * 100}%`, background: '#c4b5fd' }} /></div>
+            </div>
+            <div className="guardrail-row">
+              <div className="guardrail-info">
+                <span>Default Stop-Loss & Target</span>
+                <strong className="mono">{riskCfg.stop_loss_pct ?? 2}% SL · {riskCfg.take_profit_pct ?? 4}% TP</strong>
+              </div>
+            </div>
+          </div>
         </article>
       </div>
     </section>

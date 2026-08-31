@@ -229,18 +229,26 @@ class RiskManager:
         try:
             from core.models import Position as PositionModel
             db_side = "LONG" if pos.side in ("BUY", "LONG") else "SHORT"
-            PositionModel.objects.update_or_create(
-                symbol=pos.symbol,
-                defaults={
-                    "side": db_side,
-                    "quantity": pos.quantity,
-                    "entry_price": pos.entry_price,
-                    "current_price": pos.current_price,
-                    "stop_loss": pos.stop_loss,
-                    "take_profit": pos.take_profit,
-                    "is_open": True,
-                },
-            )
+            existing = PositionModel.objects.filter(symbol=pos.symbol, is_open=True).first()
+            if existing:
+                existing.side = db_side
+                existing.quantity = pos.quantity
+                existing.entry_price = pos.entry_price
+                existing.current_price = pos.current_price
+                existing.stop_loss = pos.stop_loss
+                existing.take_profit = pos.take_profit
+                existing.save()
+            else:
+                PositionModel.objects.create(
+                    symbol=pos.symbol,
+                    side=db_side,
+                    quantity=pos.quantity,
+                    entry_price=pos.entry_price,
+                    current_price=pos.current_price,
+                    stop_loss=pos.stop_loss,
+                    take_profit=pos.take_profit,
+                    is_open=True,
+                )
         except Exception as e:
             trade_log.log_error("DB position save", e)
 

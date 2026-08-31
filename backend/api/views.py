@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor, wait
 from decimal import Decimal
+from typing import Optional
 import threading
 import time
 
@@ -92,7 +93,7 @@ class TradeLogViewSet(viewsets.ModelViewSet):
 
 
 class DailyPerformanceViewSet(viewsets.ModelViewSet):
-    queryset = DailyPerformance.objects.all()
+    queryset = DailyPerformance.objects.all().order_by("-date")
     serializer_class = DailyPerformanceSerializer
 
 
@@ -312,13 +313,14 @@ class WatchlistScanView(APIView):
         engine = StrategyEngine(settings.active_strategies)
         watchlist = settings.watchlist or ["RELIANCE", "SBIN", "ITC", "INFY", "TCS", "TATAMOTORS"]
 
-        results = []
-        for symbol in watchlist:
+        def _scan_symbol(symbol: str) -> Optional[dict]:
             try:
                 df = fetcher.fetch_historical(symbol, days=60)
-                if df.empty:
-                    continue
+                if df is None or df.empty:
+                    return None
                 df = df.dropna(subset=["open", "high", "low", "close"])
+                if len(df) == 0:
+                    return None
                 ltp = _safe_float(df["close"].iloc[-1])
                 prev_close = _safe_float(df["close"].iloc[-2]) if len(df) > 1 else ltp
                 change_pct = round(((ltp - prev_close) / (prev_close or 1)) * 100, 2)
@@ -327,7 +329,7 @@ class WatchlistScanView(APIView):
                 latest_signal = signals[-1] if signals else None
                 sig_strength = _safe_float(getattr(latest_signal, "strength", 0.8), 0.8) if latest_signal else 0
 
-                results.append({
+                return {
                     "symbol": symbol,
                     "price": ltp,
                     "change_pct": change_pct,
@@ -336,9 +338,21 @@ class WatchlistScanView(APIView):
                     "confidence": round(sig_strength * 100, 0) if latest_signal else 0,
                     "reason": getattr(latest_signal, "reason", "No breakout condition met"),
                     "date": str(getattr(latest_signal, "timestamp", df.iloc[-1].get("date", "Today"))).split(" ")[0],
-                })
+                }
             except Exception as e:
                 trade_log.logger.warning(f"Watchlist scan error for {symbol}: {e}")
+                return None
+
+        results = []
+        with ThreadPoolExecutor(max_workers=min(8, len(watchlist))) as pool:
+            futures = [pool.submit(_scan_symbol, sym) for sym in watchlist]
+            for fut in futures:
+                try:
+                    res = fut.result()
+                    if res:
+                        results.append(res)
+                except Exception:
+                    continue
 
         return Response(results)
 

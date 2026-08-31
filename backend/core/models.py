@@ -59,7 +59,7 @@ class Position(models.Model):
     SIDES = [("LONG", "Long"), ("SHORT", "Short")]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    symbol = models.CharField(max_length=20, unique=True)
+    symbol = models.CharField(max_length=20)
     side = models.CharField(max_length=5, choices=SIDES)
     quantity = models.IntegerField()
     entry_price = models.DecimalField(max_digits=12, decimal_places=2)

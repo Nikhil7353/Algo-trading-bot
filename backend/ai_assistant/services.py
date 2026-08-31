@@ -216,7 +216,7 @@ class DailyJournalSummarizer:
     def _dispatch_journal_alerts(journal: DailyJournal):
         pnl_icon = "🟢" if journal.total_pnl > 0 else "🔴" if journal.total_pnl < 0 else "⚪"
         msg = (
-            f"<b>📊 StockBot End-Of-Day Journal ({journal.date})</b>\n\n"
+            f"<b>📊 NikhilAlgo End-Of-Day Journal ({journal.date})</b>\n\n"
             f"{pnl_icon} <b>Net P&L:</b> Rs{journal.total_pnl:+.2f}\n"
             f"🎯 <b>Win Rate:</b> {journal.win_rate:.1f}% ({journal.winning_trades}W / {journal.losing_trades}L)\n"
             f"🔢 <b>Total Trades:</b> {journal.trades_count}\n\n"
@@ -231,7 +231,7 @@ class DailyJournalSummarizer:
         try:
             from alerts.whatsapp import send_whatsapp_message
             wa_text = (
-                f"📊 *StockBot EOD Summary ({journal.date})*\n"
+                f"📊 *NikhilAlgo EOD Summary ({journal.date})*\n"
                 f"Net P&L: Rs{journal.total_pnl:+.2f}\n"
                 f"Win Rate: {journal.win_rate:.1f}% ({journal.winning_trades}W / {journal.losing_trades}L)\n"
                 f"Trades: {journal.trades_count}"
@@ -376,7 +376,7 @@ class AssistantChatService:
     Queries database state dynamically rather than dumping raw tables into prompt.
     """
 
-    SYSTEM_PROMPT = """You are StockBot AI, an advanced quantitative algorithmic trading assistant for Indian equities (NSE/BSE).
+    SYSTEM_PROMPT = """You are NikhilAlgo AI, an advanced quantitative algorithmic trading copilot for Indian equities (NSE/BSE).
 You have real-time tool access to query portfolio positions, trade execution history, P&L metrics, algorithmic strategy signals, news sentiment, and risk limits.
 
 Guidelines:
@@ -556,7 +556,7 @@ Guidelines:
             )
         else:
             text = (
-                f"### 🤖 StockBot AI Assistant\n\n"
+                f"### ✨ NikhilAlgo AI Copilot\n\n"
                 f"I can help you analyze and manage your trading bot operations:\n\n"
                 f"- 📊 **\"What is my P&L today?\"** — Real-time performance & capital tracking\n"
                 f"- 💼 **\"Show my open positions\"** — Active trades, stop-losses, and trailing profits\n"
