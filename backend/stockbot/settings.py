@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-25Zd63AHQXeoeyiZ2_Ejk3GQUmAKtIoF5nodAWeBUM5hqviVpITeVuwRfPx-N8X8ZNQ")
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-only-local-secret-key")
 DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() in ("true", "1", "yes")
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,0.0.0.0,testserver").split(",")
 
