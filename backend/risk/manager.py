@@ -1,3 +1,4 @@
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
@@ -94,14 +95,21 @@ class RiskManager:
                     current_price=pos_cmp,
                 )
 
-            # Calculate today's realized trades
+            # Calculate today's realized trades using DB aggregates (avoids loading all rows)
+            from django.db.models import Sum, Count, Q
             today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
             today_trades = TradeLogModel.objects.filter(created_at__gte=today_start)
-            if today_trades.exists():
-                self.daily_pnl = float(sum(t.pnl for t in today_trades))
-                self.winning_trades = today_trades.filter(pnl__gt=0).count()
-                self.losing_trades = today_trades.filter(pnl__lt=0).count()
-                self.daily_orders = today_trades.count()
+            agg = today_trades.aggregate(
+                total_pnl=Sum("pnl"),
+                total=Count("id"),
+                wins=Count("id", filter=Q(pnl__gt=0)),
+                losses=Count("id", filter=Q(pnl__lt=0)),
+            )
+            if agg["total"]:
+                self.daily_pnl = float(agg["total_pnl"] or 0)
+                self.winning_trades = agg["wins"]
+                self.losing_trades = agg["losses"]
+                self.daily_orders = agg["total"]
 
             # Total account equity = initial capital + realized PnL + unrealized PnL
             self.current_capital = self.capital + self.daily_pnl + unrealized
@@ -382,12 +390,15 @@ class RiskManager:
 
 
 _risk_manager: Optional[RiskManager] = None
+_risk_manager_lock = threading.Lock()
 
 
 def get_risk_manager() -> RiskManager:
     """Return the global RiskManager singleton, loading positions from DB on first call."""
     global _risk_manager
     if _risk_manager is None:
-        _risk_manager = RiskManager()
-        _risk_manager.load_from_db()
+        with _risk_manager_lock:
+            if _risk_manager is None:
+                _risk_manager = RiskManager()
+                _risk_manager.load_from_db()
     return _risk_manager

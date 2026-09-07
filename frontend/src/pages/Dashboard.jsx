@@ -1,13 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { api } from '../api';
-
-const POLL_INTERVAL = 30_000;
-
-function formatCurrency(value) {
-  const amount = Number(value || 0);
-  return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
+import { usePortfolio } from '../PortfolioContext.jsx';
+import { formatCurrency } from '../utils.js';
 
 function isWeekendInKolkata() {
   const weekday = new Intl.DateTimeFormat('en-US', {
@@ -57,13 +52,16 @@ function equityAxisDomain(values, initialCapital) {
 }
 
 export default function Dashboard() {
-  const [portfolio, setPortfolio] = useState(null);
+  // Portfolio comes from the shared context — no extra fetch/polling needed here
+  const { portfolio, error: ctxError } = usePortfolio();
   const [trades, setTrades] = useState([]);
   const [performance, setPerformance] = useState([]);
   const [positions, setPositions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState('');
+  // dataError is only for non-portfolio requests (trades, positions, etc.)
+  const [dataError, setDataError] = useState('');
+  const [staleWarning, setStaleWarning] = useState('');
   const [lastUpdated, setLastUpdated] = useState(null);
   const [squaringOff, setSquaringOff] = useState(false);
   const [closingSymbol, setClosingSymbol] = useState(null);
@@ -76,18 +74,12 @@ export default function Dashboard() {
     else setLoading(true);
 
     try {
-      const [portfolioResult, tradeResult] = await Promise.all([
-        api.portfolio(),
-        api.trades(),
-      ]);
-
-      setPortfolio(portfolioResult);
+      const tradeResult = await api.trades();
       const tradeRows = Array.isArray(tradeResult) ? tradeResult : (tradeResult.results || []);
       setTrades(tradeRows.filter((trade) => trade.pnl_type === 'REALIZED' || trade.exit_price != null));
-      setError('');
+      setDataError('');
+      setStaleWarning('');
       setLastUpdated(new Date());
-      setLoading(false);
-      setRefreshing(false);
 
       api.performance()
         .then((performanceResult) => {
@@ -100,16 +92,32 @@ export default function Dashboard() {
           setLastUpdated(new Date());
         })
         .catch(() => {});
-    } catch {
-      setError('Dashboard data could not be refreshed. Check that the API server is running on port 8000.');
+    } catch (err) {
+      if (!silent) {
+        // First-load failure — show a specific message
+        const status = err?.status;
+        if (status === 401) {
+          setDataError('Invalid API key (401). Check STOCKBOT_API_KEY and restart the server.');
+        } else if (status === 503) {
+          setDataError('Server not ready (503). Wait a moment and refresh.');
+        } else {
+          setDataError('Could not load trade data. Confirm the API server is running on port 8000.');
+        }
+      } else {
+        // Background refresh failure — show subtle stale warning, don't replace valid data
+        setStaleWarning(lastUpdated
+          ? `Auto-refresh failed — showing data from ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} IST`
+          : 'Auto-refresh failed');
+      }
+    } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [lastUpdated]);
 
   useEffect(() => {
     fetchData();
-    const timer = setInterval(() => fetchData({ silent: true }), POLL_INTERVAL);
+    const timer = setInterval(() => fetchData({ silent: true }), 30_000);
     return () => clearInterval(timer);
   }, [fetchData]);
 
@@ -135,7 +143,7 @@ export default function Dashboard() {
       setSquareOffMessage(`Closed position: ${pos.symbol} (${pos.quantity} shares).`);
       await fetchData({ silent: true });
     } catch (err) {
-      setError(`Failed to close ${pos.symbol}: ${err.message}`);
+      setDataError(`Failed to close ${pos.symbol}: ${err.message}`);
     } finally {
       setClosingSymbol(null);
       setTimeout(() => setSquareOffMessage(''), 5000);
@@ -152,7 +160,7 @@ export default function Dashboard() {
       setSquareOffMessage(res.message || 'All positions squared off successfully.');
       await fetchData({ silent: true });
     } catch (err) {
-      setError(`Square-off failed: ${err.message}`);
+      setDataError(`Square-off failed: ${err.message}`);
     } finally {
       setSquaringOff(false);
       setTimeout(() => setSquareOffMessage(''), 6000);
@@ -231,6 +239,9 @@ export default function Dashboard() {
     [equityCurve, initialCapital],
   );
 
+  // Combine first-load errors from both context (portfolio) and local fetches (trades)
+  const error = ctxError || dataError;
+
   if (loading && !portfolio) {
     return (
       <section className="dashboard-page" aria-busy="true">
@@ -295,7 +306,19 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {error && <div className="dashboard-alert" role="status">{error}</div>}
+      {error && <div className="dashboard-alert" role="alert">{error}</div>}
+      {!error && staleWarning && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '8px',
+          fontSize: '0.78rem', color: '#8b7db0',
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px dashed rgba(255,255,255,0.08)',
+          borderRadius: '8px', padding: '6px 12px', marginBottom: '12px',
+        }}>
+          <span>⚠ {staleWarning}</span>
+          <button type="button" className="text-button" style={{ fontSize: '0.78rem' }} onClick={() => fetchData({ silent: false })}>Retry</button>
+        </div>
+      )}
       {squareOffMessage && <div className="dashboard-alert success-alert" role="status" style={{ background: '#0a3820', borderColor: '#00e676', color: '#b9f6ca', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px' }}>{squareOffMessage}</div>}
 
       <div className="stats-grid dashboard-stats-grid">
@@ -480,7 +503,7 @@ export default function Dashboard() {
           <div className="tape-feed">
             {botLogs.length > 0 ? (
               botLogs.map((log, idx) => (
-                <div className={`ev ${log.level || 'info'}`} key={idx}>
+                <div className={`ev ${log.level || 'info'}`} key={`${log.timestamp}-${idx}`}>
                   <time>{String(log.timestamp || '').split(' ').pop() || '—'}</time>
                   <div className="ev-msg">{log.message}</div>
                 </div>

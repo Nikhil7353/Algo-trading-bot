@@ -15,7 +15,7 @@ class BacktestEngine:
         self.settings = get_settings()
         self.capital = capital or self.settings.bt_initial_capital
         self.engine = StrategyEngine(strategy_names)
-        self.rm = RiskManager(self.capital, persist_db=False)
+        # self.rm is created fresh inside run() — no singleton needed at init time
 
     def run(self, symbol: str, data: pd.DataFrame) -> dict:
         if data.empty or len(data) < 50:
@@ -31,7 +31,8 @@ class BacktestEngine:
         warmup = max(s.required_history_bars() for s in self.engine.strategies)
 
         for i in range(warmup, len(data)):
-            window = data.iloc[: i + 1].copy()
+            # Pass a slice (view) instead of a growing copy — strategies read but don't mutate
+            window = data.iloc[: i + 1]
             current = data.iloc[i]
             price = float(current["close"])
             high_price = float(current.get("high", price))
@@ -53,8 +54,11 @@ class BacktestEngine:
 
                 if hit_sl or hit_tp:
                     exit_price = pos.stop_loss if hit_sl else pos.take_profit
-                    # Apply slippage & commissions
-                    effective_exit = exit_price * (1 - self.settings.slippage_pct / 100) if hit_sl else exit_price
+                    # Apply slippage: SL fills below price (adverse), TP fills above (adverse for exit)
+                    effective_exit = (
+                        exit_price * (1 - self.settings.slippage_pct / 100) if hit_sl
+                        else exit_price * (1 + self.settings.slippage_pct / 100)
+                    )
                     raw_pnl = (effective_exit - pos.entry_price) * pos.quantity if pos.side == "BUY" else (pos.entry_price - effective_exit) * pos.quantity
                     fees = (pos.entry_price + effective_exit) * pos.quantity * (self.settings.commission_pct / 100)
                     net_pnl = raw_pnl - fees
@@ -73,8 +77,8 @@ class BacktestEngine:
                     })
                     continue
 
-            # 2. Strategy signals analysis
-            signals = self.engine.analyze(symbol, window)
+            # 2. Strategy signals analysis (silent=True suppresses per-bar log spam)
+            signals = self.engine.analyze(symbol, window, silent=True)
 
             if signals:
                 sig = signals[0]

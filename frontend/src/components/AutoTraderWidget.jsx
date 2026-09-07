@@ -46,12 +46,19 @@ export default function AutoTraderWidget({ compact = false }) {
 
   if (compact) {
     return (
-      <div className="autotrader-compact-pill" onClick={handleToggle} style={{ cursor: 'pointer' }} title="Click to toggle Auto-Trading Bot">
+      <button
+        type="button"
+        className="autotrader-compact-pill"
+        onClick={handleToggle}
+        aria-label={`Auto-Trader is ${status.is_running ? 'running' : 'stopped'}. Click to ${status.is_running ? 'stop' : 'start'}.`}
+        aria-pressed={status.is_running}
+        title="Click to toggle Auto-Trading Bot"
+      >
         <span className={`autotrader-dot ${status.is_running ? 'running' : 'stopped'}`} />
         <span style={{ fontWeight: 600, fontSize: '0.74rem' }}>
           AutoBot: {status.is_running ? 'ACTIVE' : 'OFF'}
         </span>
-      </div>
+      </button>
     );
   }
 
@@ -115,7 +122,7 @@ export default function AutoTraderWidget({ compact = false }) {
         <div className="terminal-body">
           {status.logs && status.logs.length > 0 ? (
             status.logs.slice(0, 8).map((log, idx) => (
-              <div key={idx} className={`terminal-log-line ${log.level}`}>
+              <div key={`${log.timestamp}-${idx}`} className={`terminal-log-line ${log.level}`}>
                 <span className="log-time">[{log.timestamp}]</span>
                 <span className="log-msg">{log.message}</span>
               </div>

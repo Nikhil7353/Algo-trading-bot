@@ -1,16 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../api';
 import CalendarHeatmap from '../components/CalendarHeatmap';
+import { formatCurrency } from '../utils.js';
 
 const DISPLAY_LIMIT = 20;
 
 function getList(response) {
   return Array.isArray(response) ? response : (response?.results || []);
-}
-
-function formatCurrency(value) {
-  const amount = Number(value || 0);
-  return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function formatName(value) {

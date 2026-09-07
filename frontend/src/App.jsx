@@ -1,9 +1,10 @@
-import { useEffect, useState, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import MarketTicker from './components/MarketTicker';
 import AutoTraderWidget from './components/AutoTraderWidget';
 import AIAssistantDrawer from './components/AIAssistantDrawer';
-import { api } from './api';
+import { usePortfolio } from './PortfolioContext.jsx';
+import { formatCurrency } from './utils.js';
 import './App.css';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -12,10 +13,6 @@ const Trades = lazy(() => import('./pages/Trades'));
 const Backtest = lazy(() => import('./pages/Backtest'));
 const Settings = lazy(() => import('./pages/Settings'));
 const AIAssistant = lazy(() => import('./pages/AIAssistant'));
-
-function formatCurrency(value) {
-  return `₹${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 function RouteFallback() {
   return (
@@ -76,19 +73,8 @@ function MarketSessionWidget() {
 }
 
 function SidebarEquity() {
-  const [portfolio, setPortfolio] = useState(null);
-
-  useEffect(() => {
-    let alive = true;
-    const load = () => {
-      api.portfolio()
-        .then((data) => { if (alive) setPortfolio(data); })
-        .catch(() => {});
-    };
-    const start = setTimeout(load, 0);
-    const timer = setInterval(load, 30_000);
-    return () => { alive = false; clearTimeout(start); clearInterval(timer); };
-  }, []);
+  // Consumes the shared PortfolioContext — no extra fetch needed
+  const { portfolio } = usePortfolio();
 
   const equity = Number(portfolio?.current_capital || 25000);
   const cash = Number(portfolio?.available_cash || 0);

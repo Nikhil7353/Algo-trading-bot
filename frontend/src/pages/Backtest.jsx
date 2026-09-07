@@ -1,24 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { api } from '../api';
-
-function formatCurrency(value) {
-  const amount = Number(value || 0);
-  return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function formatStrategy(value) {
-  return String(value).replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-const QUICK_STOCKS = [
-  { sym: 'RELIANCE', sector: 'Energy' },
-  { sym: 'SBIN', sector: 'Banking' },
-  { sym: 'TCS', sector: 'IT Services' },
-  { sym: 'INFY', sector: 'Tech' },
-  { sym: 'ITC', sector: 'FMCG' },
-  { sym: 'TATAMOTORS', sector: 'Auto' },
-];
+import { formatCurrency, formatStrategy, QUICK_STOCKS } from '../utils.js';
 
 const CAPITAL_PRESETS = [10000, 25000, 50000, 100000];
 

@@ -4,7 +4,6 @@ Monitors watchlist in background, evaluates active strategies, executes paper/li
 manages dynamic trailing stop-losses, and dispatches real-time Telegram/WhatsApp alerts.
 """
 import threading
-import time
 import logging
 from datetime import datetime
 from decimal import Decimal
@@ -12,7 +11,7 @@ from typing import List, Dict, Any, Optional
 
 from django.utils import timezone
 from core.config import get_settings
-from core.models import Position, Order, TradeLog, Signal
+from core.models import Position, TradeLog, Signal
 from data.fetcher import DataFetcher
 from strategies.engine import StrategyEngine
 from alerts.telegram import send_trade_executed_alert, send_position_closed_alert
@@ -207,20 +206,18 @@ class AutoTrader:
                 self.log(f"Error managing position {pos.symbol}: {str(e)}", "error")
 
     def _execute_auto_buy(self, signal, settings):
-        """Calculates sizing and automatically creates paper order + position."""
-        capital = Decimal(str(settings.capital or 5000))
-        max_pos_pct = Decimal(str(settings.max_position_pct or 25))
-        sl_pct = Decimal(str(settings.stop_loss_pct or 2.0))
-        tp_pct = Decimal(str(settings.take_profit_pct or 4.0))
+        """Validates through RiskManager, then creates paper order + position."""
+        from risk.manager import get_risk_manager
+        from execution.executor import OrderExecutor
 
-        entry_price = Decimal(str(signal.price))
-        max_allocation = capital * (max_pos_pct / Decimal("100.0"))
-        quantity = int(max_allocation / entry_price)
-        if quantity < 1:
-            quantity = 1
+        entry_price_float = float(signal.price)
+        rm = get_risk_manager()
 
-        stop_loss = entry_price * (Decimal("1.0") - (sl_pct / Decimal("100.0")))
-        take_profit = entry_price * (Decimal("1.0") + (tp_pct / Decimal("100.0")))
+        # Honour all risk gates: daily loss, position limits, order-rate limits, cooldown
+        approved, quantity, reason = rm.validate_signal(signal.symbol, "BUY", entry_price_float)
+        if not approved:
+            self.log(f"Auto-buy for {signal.symbol} rejected by RiskManager: {reason}", "warning")
+            return
 
         # Generate AI explanation for signal
         explanation = ""
@@ -230,51 +227,42 @@ class AutoTrader:
                 symbol=signal.symbol,
                 strategy=signal.strategy,
                 action=signal.action,
-                price=float(entry_price),
+                price=entry_price_float,
                 metadata=signal.metadata or {},
             )
         except Exception:
             pass
 
-        # Create Signal in DB
+        # Persist signal record
         db_sig = Signal.objects.create(
             symbol=signal.symbol,
             strategy=signal.strategy,
             action=signal.action,
-            price=entry_price,
+            price=Decimal(str(entry_price_float)),
             strength=signal.strength,
             explanation=explanation,
             metadata_json=signal.metadata or {},
         )
 
-        # Create Order
-        order = Order.objects.create(
-            broker_order_id=f"AUTO-{int(time.time())}",
-            symbol=signal.symbol,
-            side="BUY",
-            quantity=quantity,
-            price=entry_price,
-            status="EXECUTED",
-            mode="paper",
-            signal=db_sig,
-            executed_at=timezone.now(),
+        # Place order via executor (handles paper vs live routing)
+        executor = OrderExecutor()
+        order_id = executor.place_order(
+            signal.symbol, "BUY", quantity, entry_price_float, signal_id=db_sig.id
         )
+        if not order_id:
+            self.log(f"Auto-buy order failed for {signal.symbol}", "error")
+            return
 
-        # Create Position
-        Position.objects.create(
-            symbol=signal.symbol,
-            side="LONG",
-            quantity=quantity,
-            entry_price=entry_price,
-            current_price=entry_price,
-            stop_loss=stop_loss,
-            take_profit=take_profit,
-            unrealized_pnl=Decimal("0.0"),
-            is_open=True,
-        )
+        # Register with RiskManager and open position
+        rm.register_order()
+        pos = rm.open_position(signal.symbol, "BUY", quantity, entry_price_float)
 
         self.trades_executed_today += 1
-        self.log(f"✅ [AUTO TRADE] Bought {quantity}x {signal.symbol} @ Rs{entry_price:.2f} (SL: Rs{stop_loss:.2f}, TP: Rs{take_profit:.2f})", "info")
+        self.log(
+            f"✅ [AUTO TRADE] Bought {quantity}x {signal.symbol} @ Rs{entry_price_float:.2f} "
+            f"(SL: Rs{pos.stop_loss:.2f}, TP: Rs{pos.take_profit:.2f})",
+            "info",
+        )
 
         # Dispatch Real-Time Alerts (Telegram & WhatsApp)
         try:
@@ -282,18 +270,18 @@ class AutoTrader:
                 symbol=signal.symbol,
                 side="BUY",
                 qty=quantity,
-                price=float(entry_price),
-                stop_loss=float(stop_loss),
-                take_profit=float(take_profit),
+                price=entry_price_float,
+                stop_loss=pos.stop_loss,
+                take_profit=pos.take_profit,
                 mode="Paper (AutoBot)",
             )
             send_whatsapp_trade_alert(
                 symbol=signal.symbol,
                 side="BUY",
                 qty=quantity,
-                price=float(entry_price),
-                stop_loss=float(stop_loss),
-                take_profit=float(take_profit),
+                price=entry_price_float,
+                stop_loss=pos.stop_loss,
+                take_profit=pos.take_profit,
                 mode="Paper (AutoBot)",
             )
         except Exception as alert_err:
@@ -317,9 +305,10 @@ class AutoTrader:
             pnl_type="REALIZED",
         )
 
-        # Close position
+        # Close position — zero out unrealized_pnl since the trade is now realized
         pos.is_open = False
         pos.closed_at = timezone.now()
+        pos.unrealized_pnl = Decimal("0.0")
         pos.save(update_fields=["is_open", "closed_at", "current_price", "unrealized_pnl"])
 
         self.log(f"🏁 [POSITION CLOSED] {pos.symbol} exited @ Rs{exit_price:.2f} | Realized P&L: Rs{pnl:.2f} ({pnl_pct:+.2f}%) [{reason}]", "info")

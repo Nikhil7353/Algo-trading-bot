@@ -35,13 +35,14 @@ class StrategyEngine:
             else:
                 trade_log.log_risk(f"Unknown strategy: {name}")
 
-    def analyze(self, symbol: str, data: pd.DataFrame) -> List[Signal]:
+    def analyze(self, symbol: str, data: pd.DataFrame, silent: bool = False) -> List[Signal]:
         all_signals = []
         for strategy in self.strategies:
             try:
                 signals = strategy.generate_signals(data)
-                for sig in signals:
-                    trade_log.log_signal(sig.strategy, sig.symbol, sig.action, sig.price, sig.metadata)
+                if not silent:
+                    for sig in signals:
+                        trade_log.log_signal(sig.strategy, sig.symbol, sig.action, sig.price, sig.metadata)
                 all_signals.extend(signals)
             except Exception as e:
                 trade_log.log_error(f"Strategy {strategy.name}", e)

@@ -2,16 +2,12 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import CandlestickChart from '../components/CandlestickChart';
+import { formatStrategy, QUICK_STOCKS } from '../utils.js';
 
 function formatPrice(value) {
   const price = Number(value);
   if (!Number.isFinite(price)) return '—';
   return `₹${price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function formatStrategy(value) {
-  if (!value) return 'Strategy';
-  return String(value).replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function getScanErrorMessage(scanError) {
@@ -26,15 +22,6 @@ function getScanErrorMessage(scanError) {
 }
 
 const DEFAULT_QUANTITY = 1;
-
-const QUICK_STOCKS = [
-  { sym: 'RELIANCE', sector: 'Energy & Retail' },
-  { sym: 'SBIN', sector: 'Public Banking' },
-  { sym: 'TCS', sector: 'IT Services' },
-  { sym: 'INFY', sector: 'Tech & Cloud' },
-  { sym: 'ITC', sector: 'FMCG & Hotels' },
-  { sym: 'TATAMOTORS', sector: 'Automotive & EV' },
-];
 
 export default function Signals() {
   const navigate = useNavigate();
@@ -130,11 +117,17 @@ export default function Signals() {
 
   const confirmTrade = async () => {
     if (!tradeDialog) return;
-    const side = String(tradeDialog.side || tradeDialog.signal || tradeDialog.action || '').toUpperCase();
+    // Resolve side from the most specific field first; ensure it's a valid trade action
+    const rawSide = String(tradeDialog.action || tradeDialog.side || '').toUpperCase();
+    const side = ['BUY', 'SELL'].includes(rawSide) ? rawSide : '';
     const price = Number(tradeDialog.price || tradeDialog.current_price || tradeDialog.close);
     const qty = Number(quantity);
 
-    if (!side || !price || !qty) {
+    if (!side) {
+      setTradeResult({ ok: false, message: 'Invalid order side. Expected BUY or SELL.' });
+      return;
+    }
+    if (!price || !qty) {
       setTradeResult({ ok: false, message: 'Missing order details. Check signal and try again.' });
       return;
     }
@@ -159,7 +152,7 @@ export default function Signals() {
     }
   };
 
-  const dialogSide = tradeDialog ? String(tradeDialog.side || tradeDialog.signal || tradeDialog.action || '').toUpperCase() : '';
+  const dialogSide = tradeDialog ? (String(tradeDialog.action || tradeDialog.side || '').toUpperCase()) : '';
   const dialogPrice = tradeDialog ? Number(tradeDialog.price || tradeDialog.current_price || tradeDialog.close) : 0;
   const estimatedTotal = Number(quantity) * (Number.isFinite(dialogPrice) ? dialogPrice : 0);
 

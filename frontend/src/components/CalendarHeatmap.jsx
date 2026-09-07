@@ -1,10 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
-
-function formatCurrency(value) {
-  const amount = Number(value || 0);
-  return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
+import { formatCurrency } from '../utils';
 
 export default function CalendarHeatmap() {
   const [calendar, setCalendar] = useState([]);
@@ -18,7 +14,8 @@ export default function CalendarHeatmap() {
         if (res?.calendar) {
           setCalendar(res.calendar);
           if (res.calendar.length > 0) {
-            setSelectedDay(res.calendar[0]);
+            // Select the most recent day (last element) by default
+            setSelectedDay(res.calendar[res.calendar.length - 1]);
           }
         }
       } catch {

@@ -40,7 +40,7 @@ export const api = {
   testWhatsApp: (payload) => request('/whatsapp-test/', { method: 'POST', body: JSON.stringify(payload) }),
   getAutoTraderStatus: () => request('/autotrader/status/'),
   toggleAutoTrader: (payload = {}) => request('/autotrader/toggle/', { method: 'POST', body: JSON.stringify(payload) }),
-  getTradesCalendar: () => request('/trades-calendar/'),
+  getTradesCalendar: (days = 90) => request(`/trades-calendar/?days=${days}`),
   
   // AI Assistant APIs
   chatAssistant: (message, history = []) =>

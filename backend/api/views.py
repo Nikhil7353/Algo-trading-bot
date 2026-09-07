@@ -1,3 +1,4 @@
+import math
 from concurrent.futures import ThreadPoolExecutor, wait
 from decimal import Decimal
 from typing import Optional
@@ -106,9 +107,6 @@ class PortfolioView(APIView):
         return Response(summary)
 
 
-import math
-
-
 def _safe_float(val, default=0.0):
     try:
         f = float(val)
@@ -131,30 +129,42 @@ class ScanView(APIView):
             data = fetcher.fetch_historical(symbol)
             if not data.empty:
                 data = data.dropna(subset=["open", "high", "low", "close"])
+                # Try to load AI explainer once per request (optional dependency)
+                try:
+                    from ai_assistant.services import SignalExplainer as _SignalExplainer
+                    signal_explainer = _SignalExplainer
+                except Exception:
+                    signal_explainer = None
+
                 signals = engine.analyze(symbol, data)
+                explanations = {}
                 for sig in signals:
                     explanation = ""
-                    try:
-                        from ai_assistant.services import SignalExplainer
-                        explanation = SignalExplainer.explain_signal(
-                            symbol=sig.symbol,
-                            strategy=sig.strategy,
-                            action=sig.action,
-                            price=_safe_float(sig.price),
-                            metadata=sig.metadata or {},
-                        )
-                    except Exception:
-                        pass
+                    if signal_explainer is not None:
+                        try:
+                            explanation = signal_explainer.explain_signal(
+                                symbol=sig.symbol,
+                                strategy=sig.strategy,
+                                action=sig.action,
+                                price=_safe_float(sig.price),
+                                metadata=sig.metadata or {},
+                            )
+                        except Exception:
+                            pass
 
-                    Signal.objects.create(
+                    # Deduplicate: one record per (symbol, strategy, action) per day.
+                    Signal.objects.get_or_create(
                         symbol=sig.symbol,
                         strategy=sig.strategy,
                         action=sig.action,
-                        price=_safe_float(sig.price),
-                        strength=_safe_float(sig.strength, 0.8),
-                        explanation=explanation,
-                        metadata_json=sig.metadata or {},
+                        defaults=dict(
+                            price=_safe_float(sig.price),
+                            strength=_safe_float(sig.strength, 0.8),
+                            explanation=explanation,
+                            metadata_json=sig.metadata or {},
+                        ),
                     )
+                    explanations[f"{sig.symbol}:{sig.strategy}:{sig.action}"] = explanation
 
                 candles = []
                 for idx, row in data.tail(40).iterrows():
@@ -181,9 +191,7 @@ class ScanView(APIView):
                             "price": _safe_float(s.price),
                             "strategy": s.strategy,
                             "strength": _safe_float(s.strength, 0.8),
-                            "explanation": getattr(s, "explanation", "") or SignalExplainer.explain_signal(
-                                symbol, s.strategy, s.action, _safe_float(s.price), getattr(s, "metadata", {}) or {}
-                            ),
+                            "explanation": explanations.get(f"{s.symbol}:{s.strategy}:{s.action}", ""),
                         }
                         for s in signals
                     ],
@@ -326,7 +334,7 @@ class WatchlistScanView(APIView):
                 change_pct = round(((ltp - prev_close) / (prev_close or 1)) * 100, 2)
 
                 signals = engine.analyze(symbol, df)
-                latest_signal = signals[-1] if signals else None
+                latest_signal = max(signals, key=lambda s: s.strength) if signals else None
                 sig_strength = _safe_float(getattr(latest_signal, "strength", 0.8), 0.8) if latest_signal else 0
 
                 return {
@@ -374,7 +382,8 @@ def _update_env_file(updates: dict):
             k, _, _ = line.partition("=")
             k = k.strip()
             if k in updates:
-                new_lines.append(f"{k}={updates[k]}\n")
+                # Strip newlines/whitespace so multi-line values can't corrupt the file
+                new_lines.append(f"{k}={str(updates[k]).strip()}\n")
                 keys_written.add(k)
                 continue
         new_lines.append(line)
@@ -382,7 +391,7 @@ def _update_env_file(updates: dict):
     # Append any new keys
     for k, v in updates.items():
         if k not in keys_written:
-            new_lines.append(f"{k}={v}\n")
+            new_lines.append(f"{k}={str(v).strip()}\n")
 
     with open(env_file, "w", encoding="utf-8") as f:
         f.writelines(new_lines)
@@ -465,10 +474,14 @@ class SettingsView(APIView):
             with open(settings_file, "w", encoding="utf-8") as f:
                 yaml.safe_dump(yaml_settings, f, default_flow_style=False, sort_keys=False)
 
+            # Invalidate the settings singleton so the next call re-reads settings.yaml
+            from core.config import reset_settings
+            reset_settings()
+
             rm = get_risk_manager()
             risk_cfg = new_settings.get("risk", {})
             if "capital" in risk_cfg:
-                rm.initial_capital = float(risk_cfg["capital"])
+                rm.capital = float(risk_cfg["capital"])
                 rm.current_capital = float(risk_cfg["capital"])
             if "max_position_pct" in risk_cfg:
                 rm.max_position_pct = float(risk_cfg["max_position_pct"])
@@ -600,7 +613,15 @@ class CalendarPnLView(APIView):
         from core.models import TradeLog
         import collections
 
-        trades = TradeLog.objects.filter(pnl_type="REALIZED").order_by("-created_at")
+        # Default to last 90 days; caller may pass ?days=N
+        try:
+            days = max(1, int(request.query_params.get("days", 90)))
+        except (ValueError, TypeError):
+            days = 90
+        from django.utils import timezone as tz
+        cutoff = tz.now() - __import__("datetime").timedelta(days=days)
+
+        trades = TradeLog.objects.filter(pnl_type="REALIZED", created_at__gte=cutoff).order_by("-created_at")
         daily_map = collections.defaultdict(lambda: {
             "pnl": 0.0,
             "wins": 0,

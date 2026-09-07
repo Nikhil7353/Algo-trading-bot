@@ -265,10 +265,10 @@ export default function CandlestickChart({ data = [], height = 340, symbol = 'RE
           const botY = getY(Math.min(d.open, d.close));
           const bodyHeight = Math.max(1.8, botY - topY);
 
+          const hitWidth = Math.max(candleWidth + 6, (svgWidth - paddingLeft - paddingRight) / chartData.length);
           return (
             <g
               key={`candle-${i}`}
-              onMouseEnter={() => setHoverIndex(i)}
               style={{ cursor: 'crosshair' }}
             >
               {/* Wick */}
@@ -281,6 +281,15 @@ export default function CandlestickChart({ data = [], height = 340, symbol = 'RE
                 height={bodyHeight}
                 fill={color}
                 rx="1"
+              />
+              {/* Invisible full-height hit area — wider than the visible candle */}
+              <rect
+                x={x - hitWidth / 2}
+                y={paddingTop}
+                width={hitWidth}
+                height={priceChartHeight}
+                fill="transparent"
+                onMouseEnter={() => setHoverIndex(i)}
               />
             </g>
           );

@@ -1,3 +1,4 @@
+import threading
 import yaml
 from pathlib import Path
 from dotenv import load_dotenv
@@ -57,10 +58,20 @@ class Settings:
 
 
 _settings = None
+_settings_lock = threading.Lock()
 
 
 def get_settings() -> Settings:
     global _settings
     if _settings is None:
-        _settings = Settings()
+        with _settings_lock:
+            if _settings is None:
+                _settings = Settings()
     return _settings
+
+
+def reset_settings() -> None:
+    """Invalidate the cached Settings singleton so the next call reloads from disk."""
+    global _settings
+    with _settings_lock:
+        _settings = None
